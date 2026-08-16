@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ROTINA 2026</title>
 <meta name="description" content="Rotina pessoal, trabalho e jogos em um único dashboard.">
-<meta name="theme-color" content="#1a1614">
+<meta name="theme-color" content="#141414">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon.svg">
 <link rel="icon" href="icons/icon.svg">
@@ -16,58 +16,47 @@
 </head>
 <body>
 
-<svg class="noise-overlay" xmlns="http://www.w3.org/2000/svg">
-  <filter id="noiseFilter">
-    <feTurbulence type="fractalNoise" baseFrequency="0.68" numOctaves="4" stitchTiles="stitch"/>
-  </filter>
-  <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
-</svg>
+<div class="app-shell" id="app-shell">
+  <button class="mobile-toggle" id="mobile-toggle" aria-label="Abrir menu"></button>
+  <div class="sidebar-backdrop hidden" id="sidebar-backdrop"></div>
 
-<div id="app">
-  <header class="top">
-    <div class="m-stripe"></div>
-    <div class="header-inner">
-      <div class="logo-block">
-        <span class="logo">ROTINA</span>
-        <span class="tagline">pessoal · trabalho · jogos — 2026</span>
-      </div>
-      <div class="header-right">
-        <div class="clock-block">
-          <div class="clock" id="clock">--:--</div>
-          <div class="date-line" id="date-line">-</div>
-        </div>
-        <div class="week-badge" id="week-badge">SEM --</div>
-        <div class="barcode" id="barcode"></div>
-      </div>
-    </div>
-    <nav class="tabs">
-      <button id="tab-hoje">Hoje</button>
-      <button id="tab-rotina">Rotina</button>
-      <button id="tab-trabalho">Trabalho</button>
-      <button id="tab-pessoal">Pessoal</button>
-      <button id="tab-jogos">Jogos</button>
-      <button id="tab-quadro">Quadro Conjunto</button>
+  <aside class="icon-rail" id="icon-rail">
+    <div class="rail-logo"></div>
+    <div class="rail-divider"></div>
+    <nav class="rail-nav" id="rail-nav">
+      <button class="rail-btn" data-view="hoje" title="Hoje"></button>
+      <button class="rail-btn" data-view="rotina" title="Rotina"></button>
+      <button class="rail-btn" data-view="trabalho" title="Trabalho"></button>
+      <button class="rail-btn" data-view="pessoal" title="Pessoal"></button>
+      <button class="rail-btn" data-view="jogos" title="Jogos"></button>
+      <button class="rail-btn" data-view="quadro" title="Quadro Conjunto"></button>
     </nav>
-  </header>
+    <span class="rail-brand-vertical">ROTINA 2026</span>
+    <button class="rail-gear" id="btn-settings" title="Configurações"></button>
+  </aside>
 
-  <main>
-    <div class="install-banner hidden" id="install-banner">
-      <span>📲 Instale como app: no iPhone use Safari → Compartilhar → <b>Adicionar à Tela de Início</b>. No Android/Chrome use o menu → <b>Instalar app</b>. Assim as notificações da rotina, prazos e jogos chegam na Central de Notificações (e no Apple Watch pareado).</span>
-      <span style="display:flex;gap:8px">
-        <button class="btn" id="enable-notif">Ativar notificações</button>
-        <button class="btn ghost" id="dismiss-install">Ok, entendi</button>
-      </span>
-    </div>
+  <aside class="side-panel" id="side-panel">
+    <div id="side-panel-body"></div>
+  </aside>
 
+  <main class="content-area">
     <section id="view-hoje" class="view"></section>
     <section id="view-rotina" class="view hidden"></section>
     <section id="view-trabalho" class="view hidden"></section>
     <section id="view-pessoal" class="view hidden"></section>
     <section id="view-jogos" class="view hidden"></section>
     <section id="view-quadro" class="view hidden"></section>
+    <div class="foot-note">rotina 2026 · dados salvos apenas neste dispositivo (localStorage)</div>
   </main>
 
-  <footer class="foot">rotina 2026 · dados salvos apenas neste dispositivo (localStorage)</footer>
+  <div class="modal-overlay hidden" id="settings-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="settings-close">✕</button>
+      <h3>Configurações</h3>
+      <div class="modal-sub">notificações, instalação e preferências</div>
+      <div id="settings-body"></div>
+    </div>
+  </div>
 </div>
 
 <script src="app.js"></script>

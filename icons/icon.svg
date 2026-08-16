@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <rect width="192" height="192" fill="#1a1614"/>
-  <rect x="0" y="24" width="192" height="8" fill="#7498b8" opacity="0.85"/>
-  <rect x="0" y="160" width="192" height="8" fill="#c0624a" opacity="0.85"/>
-  <text x="96" y="112" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="40" fill="#f0ece2" text-anchor="middle" letter-spacing="2">R26</text>
+  <rect width="192" height="192" rx="36" fill="#141414"/>
+  <g stroke="#f4f4f2" stroke-width="10" stroke-linecap="round">
+    <line x1="96" y1="40" x2="96" y2="152"/>
+    <line x1="46" y1="66" x2="146" y2="126"/>
+    <line x1="146" y1="66" x2="46" y2="126"/>
+  </g>
 </svg>

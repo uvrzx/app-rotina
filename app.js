@@ -14,10 +14,6 @@ function timeToMin(t) {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 }
-function minToTime(min) {
-  min = ((min % 1440) + 1440) % 1440;
-  return `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
-}
 function weekdayOf(dateISO) {
   const [y, m, d] = dateISO.split('-').map(Number);
   return new Date(y, m - 1, d).getDay();
@@ -49,7 +45,7 @@ function buildWeekRoutine() {
   const week = {};
   for (const d of [1, 2, 3, 4, 5]) week[d] = weekdayBlocks();
 
-  week[3] = weekdayBlocks().filter(b => b.id !== 'livre').concat([]);
+  week[3] = weekdayBlocks().filter(b => b.id !== 'livre');
   week[3].splice(6, 0, { id: 'volei-qua', hora_inicio: '19:00', hora_fim: '23:00', nome: 'Vôlei', tag: 'volei' });
 
   week[5] = weekdayBlocks().filter(b => b.id !== 'livre');
@@ -270,6 +266,7 @@ function personalListRef(path) {
   if (path.startsWith('residencial.')) return STATE.personal.residencial[path.split('.')[1]];
   return STATE.personal[path];
 }
+function openCount(list) { return list.filter(i => i.status !== 'concluido').length; }
 function addPersonalItem(path, texto, valor, data) {
   const list = personalListRef(path);
   list.push({ id: 'p' + Date.now() + Math.random().toString(36).slice(2, 6), texto, valor: valor || null, data: data || null, status: 'a_fazer', compartilhada: false });
@@ -306,171 +303,67 @@ function allPersonalWithOrigin() {
   return out;
 }
 
-/* ---------------- rendering: header ---------------- */
-function renderHeader() {
-  const now = new Date();
-  document.getElementById('clock').textContent = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
-  document.getElementById('date-line').textContent = `${WEEKDAY_NAMES[now.getDay()]}, ${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
-  document.getElementById('week-badge').textContent = `SEM ${isoWeekNumber(now)}`;
-}
-function renderBarcode() {
-  const el = document.getElementById('barcode');
-  el.innerHTML = '';
-  const seed = todayISO().replace(/-/g, '');
-  for (let i = 0; i < 28; i++) {
-    const w = (parseInt(seed[i % seed.length], 10) % 3) + 1;
-    const h = 10 + ((parseInt(seed[(i * 3) % seed.length], 10) * 7) % 20);
-    const span = document.createElement('span');
-    span.style.width = w + 'px';
-    span.style.height = h + 'px';
-    el.appendChild(span);
-  }
+/* ---------------- icons (minimal hand-drawn line set) ---------------- */
+const ICONS = {
+  home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1h4v-6h3v6h4a1 1 0 0 0 1-1v-9"/>',
+  calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8 3v3M16 3v3"/>',
+  briefcase: '<rect x="3.5" y="7.5" width="17" height="11" rx="1.5"/><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5"/>',
+  heart: '<path d="M12 20s-7-4.3-9.4-8.4C.9 8.2 2.1 4.9 5.3 4.3a4.6 4.6 0 0 1 6.7 2 4.6 4.6 0 0 1 6.7-2c3.2.6 4.4 3.9 2.7 7.3C19 15.7 12 20 12 20Z"/>',
+  trophy: '<path d="M7 4h10v3.5a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4.5A1.5 1.5 0 0 0 3 6.5v1A3.5 3.5 0 0 0 6.5 11H7"/><path d="M17 5h2.5A1.5 1.5 0 0 1 21 6.5v1A3.5 3.5 0 0 1 17.5 11H17"/><path d="M12 12.5V16"/><path d="M8.5 20h7l-1-3.5h-5L8.5 20Z"/>',
+  layers: '<path d="m12 3 8 4.5-8 4.5-8-4.5Z"/><path d="m4 12 8 4.5 8-4.5"/><path d="m4 16 8 4.5 8-4.5"/>',
+  gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.35-4.35"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
+  chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  folder: '<path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h4l2 2h8a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5v-11Z"/>',
+  arrowRight: '<path d="M4 12h16M13 5l7 7-7 7"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  archive: '<rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 18V9"/><path d="M10 13h4"/>',
+  alert: '<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/>',
+  share: '<circle cx="6" cy="12" r="2.3"/><circle cx="17.5" cy="5.5" r="2.3"/><circle cx="17.5" cy="18.5" r="2.3"/><path d="m8 10.8 7.6-4.3M8 13.2l7.6 4.3"/>',
+  asterisk: '<path d="M12 3v18M4.5 7.5l15 9M19.5 7.5l-15 9"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+};
+function svgIcon(name, size) {
+  size = size || 18;
+  return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
 }
 
-/* ---------------- rendering: HOJE ---------------- */
-function tagClass(tag) { return tag ? `t-${tag}` : ''; }
-function tagLabel(tag) {
-  const map = { trabalho: 'Trabalho', treino: 'Treino', volei: 'Vôlei', futsal: 'Futsal', estudo: 'Estudo', sono: 'Sono', livre: 'Livre', almoco: 'Almoço' };
-  return tag ? (map[tag] || tag) : '';
-}
-function renderHoje() {
+/* ---------------- badge counts ---------------- */
+function countBlocksPendingToday() {
   const dateISO = todayISO();
-  const blocks = blocksForDate(dateISO);
-  const games = gamesOnDate(dateISO);
-  const conflicts = games.map(g => ({ g, block: gameConflict(g) })).filter(x => x.block);
-
-  const wrap = document.getElementById('view-hoje');
-  let html = '';
-
-  if (conflicts.length) {
-    html += `<div class="panel"><div class="panel-title">Alertas de Conflito</div>`;
-    for (const c of conflicts) {
-      html += `<div class="alert-box"><span class="icon">⚠️</span><span><b>${c.g.teamNome}</b> às ${c.g.hora} sobrepõe <b>${c.block.nome}</b> (${c.block.hora_inicio}–${c.block.hora_fim || ''}) hoje.</span></div>`;
-    }
-    html += `</div>`;
-  }
-
-  html += `<div class="schedule-card">
-    <div class="panel-title">Timeline de Hoje</div>
-    <div class="panel-sub">${WEEKDAY_NAMES[weekdayOf(dateISO)]} · ${dateISO}</div>`;
-  const rows = [];
-  for (const b of blocks) {
-    rows.push({ sortKey: timeToMin(b.hora_inicio), kind: 'block', data: b });
-  }
-  for (const g of games) {
-    rows.push({ sortKey: g.hora ? timeToMin(g.hora) : 1440, kind: 'game', data: g });
-  }
-  const workToday = STATE.workTasks.filter(t => t.prazo === dateISO && t.status !== 'concluido');
-  for (const t of workToday) rows.push({ sortKey: 1441, kind: 'work', data: t });
-  const personalToday = allPersonalWithOrigin().filter(x => x.item.data === dateISO && x.item.status !== 'concluido');
-  for (const p of personalToday) rows.push({ sortKey: 1442, kind: 'personal', data: p });
-  rows.sort((a, b) => a.sortKey - b.sortKey);
-
-  if (!rows.length) html += `<div class="empty-note">nada agendado hoje...</div>`;
-  for (const r of rows) {
-    if (r.kind === 'block') {
-      const b = r.data;
-      const now = isBlockNow(b, dateISO);
-      const done = isBlockDone(dateISO, b.id);
-      html += `<div class="sched-row ${now ? 'now' : ''}">
-        <span class="time">${b.hora_inicio}${b.hora_fim ? '–' + b.hora_fim : ''}</span>
-        <span class="name">${b.nome} ${b.tag ? `<span class="tag ${tagClass(b.tag)}">${tagLabel(b.tag)}</span>` : ''}</span>
-        <button class="done-check ${done ? 'checked' : ''}" data-block-id="${b.id}" onclick="onToggleBlock('${b.id}')">${done ? '✓' : ''}</button>
-      </div>`;
-    } else if (r.kind === 'game') {
-      const g = r.data;
-      const hasConflict = gameConflict(g);
-      html += `<div class="sched-row">
-        <span class="time">${g.hora || 'TBD'}</span>
-        <span class="name">🏟 ${g.teamNome} x ${g.adversario} ${hasConflict ? '<span class="badge-conflict">⚠️ Conflito</span>' : ''}</span>
-      </div>`;
-    } else if (r.kind === 'work') {
-      const t = r.data;
-      html += `<div class="sched-row">
-        <span class="time">Prazo hoje</span>
-        <span class="name">💼 ${t.titulo} <span class="tier-pill ${t.tier}">${t.tier}</span></span>
-      </div>`;
-    } else if (r.kind === 'personal') {
-      html += `<div class="sched-row">
-        <span class="time">Vence hoje</span>
-        <span class="name">🏠 ${r.data.item.texto} <span class="tag">${r.data.origin}</span></span>
-      </div>`;
-    }
-  }
-  html += `</div>`;
-
-  html += `<div class="panel"><div class="panel-title">Hábitos Rápidos</div><div class="panel-sub">toque para alternar</div>`;
-  html += renderHabitQuickToggles(dateISO);
-  html += `</div>`;
-
-  wrap.innerHTML = html;
+  return blocksForDate(dateISO).filter(b => !isBlockDone(dateISO, b.id)).length;
 }
-function renderHabitQuickToggles(dateISO) {
+function countTasksToday() {
+  const dateISO = todayISO();
+  return STATE.workTasks.filter(t => t.prazo === dateISO && t.status !== 'concluido').length;
+}
+function countPersonalToday() {
+  const dateISO = todayISO();
+  return allPersonalWithOrigin().filter(x => x.item.data === dateISO && x.item.status !== 'concluido').length;
+}
+function countHojeBadge() { return countBlocksPendingToday() + countTasksToday() + countPersonalToday(); }
+function countHabitsPendingToday() {
+  const log = STATE.habitLog[todayISO()] || {};
+  return HABITS.filter(h => (log[h.id] || 'none') === 'none').length;
+}
+function countTrabalhoOpen() { return STATE.workTasks.filter(t => t.status !== 'concluido').length; }
+function countPessoalOpen() { return allPersonalWithOrigin().filter(x => x.item.status !== 'concluido').length; }
+function countJogosBadge() { return gamesOnDate(todayISO()).length; }
+function countQuadroOpen() {
+  const workShared = STATE.workTasks.filter(t => t.compartilhada && t.status !== 'concluido').length;
+  const persShared = allPersonalWithOrigin().filter(x => x.item.compartilhada && x.item.status !== 'concluido').length;
+  return workShared + persShared;
+}
+function countUrgentes() { return STATE.workTasks.filter(t => t.tier === 'urgente' && t.status !== 'concluido').length; }
+function countConcluidosHoje() {
+  const dateISO = todayISO();
+  const blocksDone = blocksForDate(dateISO).filter(b => isBlockDone(dateISO, b.id)).length;
   const log = STATE.habitLog[dateISO] || {};
-  let html = '<div class="stat-row">';
-  for (const h of HABITS) {
-    const state = log[h.id] || 'none';
-    html += `<div class="stat-box" style="cursor:pointer" onclick="onQuickHabit('${h.id}')">
-      <div class="num" style="font-size:20px">${state === 'done' ? '✓' : state === 'skip' ? '–' : '○'}</div>
-      <div class="lbl">${h.nome}</div>
-    </div>`;
-  }
-  html += '</div>';
-  return html;
-}
-function onToggleBlock(blockId) { toggleBlockDone(todayISO(), blockId); renderHoje(); }
-function onQuickHabit(habitId) {
-  const dateISO = todayISO();
-  if (!STATE.habitLog[dateISO]) STATE.habitLog[dateISO] = {};
-  const cur = STATE.habitLog[dateISO][habitId] || 'none';
-  const next = cur === 'none' ? 'done' : cur === 'done' ? 'skip' : 'none';
-  STATE.habitLog[dateISO][habitId] = next;
-  saveState();
-  renderHoje();
-  if (document.getElementById('view-rotina').classList.contains('active-view')) renderRotina();
-}
-
-/* ---------------- rendering: ROTINA ---------------- */
-function renderRotina() {
-  const wrap = document.getElementById('view-rotina');
-  let html = `<div class="panel"><div class="panel-title">Grade Semanal</div><div class="panel-sub">blocos fixos por dia</div>`;
-  html += `<div class="grid-2">`;
-  for (let d = 0; d < 7; d++) {
-    const blocks = ROUTINE[d];
-    html += `<div class="schedule-card" style="margin-bottom:14px">
-      <div class="panel-sub" style="margin-bottom:8px">${WEEKDAY_SHORT[d]}</div>`;
-    for (const b of blocks) {
-      html += `<div class="sched-row">
-        <span class="time" style="font-size:14px;min-width:78px">${b.hora_inicio}${b.hora_fim ? '–' + b.hora_fim : ''}</span>
-        <span class="name">${b.nome} ${b.tag ? `<span class="tag ${tagClass(b.tag)}">${tagLabel(b.tag)}</span>` : ''}</span>
-      </div>`;
-    }
-    html += `</div>`;
-  }
-  html += `</div></div>`;
-
-  html += renderHabitsPanel();
-  wrap.innerHTML = html;
-}
-function last30Dates() {
-  const out = [];
-  const d = new Date();
-  for (let i = 29; i >= 0; i--) {
-    const dd = new Date(d);
-    dd.setDate(d.getDate() - i);
-    out.push(isoFromDate(dd));
-  }
-  return out;
-}
-function last7Dates() {
-  const out = [];
-  const d = new Date();
-  for (let i = 6; i >= 0; i--) {
-    const dd = new Date(d);
-    dd.setDate(d.getDate() - i);
-    out.push(isoFromDate(dd));
-  }
-  return out;
+  const habitsDone = HABITS.filter(h => log[h.id] === 'done').length;
+  return blocksDone + habitsDone;
 }
 function habitStreak(habitId) {
   let streak = 0;
@@ -483,9 +376,323 @@ function habitStreak(habitId) {
   }
   return streak;
 }
+function bestStreak() { return Math.max(0, ...HABITS.map(h => habitStreak(h.id))); }
+
+/* ---------------- navigation state ---------------- */
+const TABS = ['hoje', 'rotina', 'trabalho', 'pessoal', 'jogos', 'quadro'];
+let currentView = 'hoje';
+let activeTreeId = null;
+let pessoalSub = 'diario';
+let trabalhoActiveBoard = 'projeto-yt';
+let treeExpanded = new Set(['node-trabalho', 'node-pessoal']);
+let treeSearch = '';
+let treeIndex = {};
+
+/* ---------------- document tree (Trabalho + Pessoal) ---------------- */
+function buildTree() {
+  return [
+    {
+      id: 'node-trabalho', label: 'Trabalho', count: countTrabalhoOpen(),
+      children: WORK_BOARDS.map(b => ({
+        id: 'board-' + b.id, label: b.nome,
+        count: openCount(STATE.workTasks.filter(t => t.board === b.id)),
+        action: () => { trabalhoActiveBoard = b.id; activeTreeId = 'board-' + b.id; switchView('trabalho'); renderSidebar(); },
+      })),
+    },
+    {
+      id: 'node-pessoal', label: 'Pessoal', count: countPessoalOpen(),
+      children: [
+        { id: 'p-diario', label: 'Diário', count: PERSONAL_SIMPLE.reduce((s, x) => s + openCount(STATE.personal[x.key]), 0), action: () => openPessoalTree('diario', 'p-diario') },
+        { id: 'p-financas', label: 'Finanças', count: openCount(STATE.personal.financas), action: () => openPessoalTree('financas', 'p-financas') },
+        { id: 'p-objetivos', label: 'Objetivos', count: openCount(STATE.personal.objetivos), action: () => openPessoalTree('objetivos', 'p-objetivos') },
+        { id: 'p-wishlist', label: 'Wish List', count: openCount(STATE.personal.wishlist), action: () => openPessoalTree('wishlist', 'p-wishlist') },
+        {
+          id: 'node-residencial', label: 'Residencial',
+          count: openCount(STATE.personal.residencial.limpeza) + openCount(STATE.personal.residencial.lixo) + openCount(STATE.personal.residencial.gatos),
+          children: [
+            { id: 'p-limpeza', label: 'Limpeza da Casa', count: openCount(STATE.personal.residencial.limpeza), action: () => openPessoalTree('residencial', 'p-limpeza') },
+            { id: 'p-lixo', label: 'Troca de Lixo', count: openCount(STATE.personal.residencial.lixo), action: () => openPessoalTree('residencial', 'p-lixo') },
+            { id: 'p-gatos', label: 'Cuidados com os Gatos', count: openCount(STATE.personal.residencial.gatos), action: () => openPessoalTree('residencial', 'p-gatos') },
+          ],
+        },
+        { id: 'p-veiculos', label: 'Veículos', count: openCount(STATE.personal.veiculos), action: () => openPessoalTree('veiculos', 'p-veiculos') },
+      ],
+    },
+  ];
+}
+function openPessoalTree(subId, treeId) {
+  pessoalSub = subId; activeTreeId = treeId; switchView('pessoal'); renderSidebar();
+}
+function nodeMatches(node, term) {
+  if (!term) return true;
+  if (node.label.toLowerCase().includes(term)) return true;
+  if (node.children) return node.children.some(c => nodeMatches(c, term));
+  return false;
+}
+function renderTreeNode(node, depth, term) {
+  if (!nodeMatches(node, term)) return '';
+  const hasChildren = node.children && node.children.length;
+  const isOpen = term ? true : treeExpanded.has(node.id);
+  const isActive = activeTreeId === node.id;
+  let html = `<div class="tree-node">
+    <div class="tree-row ${isActive ? 'active' : ''}" style="padding-left:${8 + depth * 14}px" onclick="${hasChildren ? `onTreeToggle('${node.id}')` : `onTreeLeaf('${node.id}')`}">
+      <span class="chev ${hasChildren ? (isOpen ? 'open' : '') : 'spacer'}">${hasChildren ? svgIcon('chevron', 12) : ''}</span>
+      <span class="t-icon">${svgIcon('folder', 14)}</span>
+      <span class="t-label">${node.label}</span>
+      <span class="count-badge">${node.count}</span>
+    </div>`;
+  if (hasChildren && isOpen) {
+    html += `<div class="tree-children">${node.children.map(c => renderTreeNode(c, depth + 1, term)).join('')}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+function renderTreeInto() {
+  const tree = buildTree();
+  treeIndex = {};
+  const indexify = (nodes) => { nodes.forEach(n => { treeIndex[n.id] = n; if (n.children) indexify(n.children); }); };
+  indexify(tree);
+  const term = treeSearch.trim().toLowerCase();
+  const html = tree.map(n => renderTreeNode(n, 0, term)).join('');
+  document.getElementById('doc-tree').innerHTML = html || '<div class="empty-note">nada encontrado</div>';
+}
+function onTreeToggle(id) {
+  if (treeExpanded.has(id)) treeExpanded.delete(id); else treeExpanded.add(id);
+  renderTreeInto();
+}
+function onTreeLeaf(id) {
+  const node = treeIndex[id];
+  if (node && node.action) node.action();
+}
+function onTreeSearch(v) { treeSearch = v; renderTreeInto(); }
+
+/* ---------------- sidebar ---------------- */
+function navItem(view, icon, label, count) {
+  const active = currentView === view && !activeTreeId;
+  return `<button class="nav-item ${active ? 'active' : ''}" onclick="onNav('${view}')">
+    <span class="ni-icon">${svgIcon(icon, 16)}</span>
+    <span class="ni-label">${label}</span>
+    <span class="count-badge">${count}</span>
+  </button>`;
+}
+function statusItem(icon, label, count, targetView, warn) {
+  return `<button class="nav-item" onclick="onNav('${targetView}')">
+    <span class="ni-icon">${svgIcon(icon, 16)}</span>
+    <span class="ni-label">${label}</span>
+    <span class="count-badge ${warn && count > 0 ? 'warn' : ''}">${count}</span>
+  </button>`;
+}
+function renderSidebar() {
+  const body = document.getElementById('side-panel-body');
+  body.innerHTML = `
+    <div class="profile-row">
+      <div class="avatar">${svgIcon('home', 18)}</div>
+      <div class="profile-info">
+        <div class="p-name">Minha Rotina ${svgIcon('chevronDown', 12)}</div>
+        <div class="p-sub">dashboard pessoal · 2026</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Navegação</div>
+      <div class="nav-list">
+        ${navItem('hoje', 'home', 'Hoje', countHojeBadge())}
+        ${navItem('rotina', 'calendar', 'Rotina', countHabitsPendingToday())}
+        ${navItem('trabalho', 'briefcase', 'Trabalho', countTrabalhoOpen())}
+        ${navItem('pessoal', 'heart', 'Pessoal', countPessoalOpen())}
+        ${navItem('jogos', 'trophy', 'Jogos', countJogosBadge())}
+        ${navItem('quadro', 'layers', 'Quadro Conjunto', countQuadroOpen())}
+      </div>
+    </div>
+
+    <div class="side-divider"></div>
+    <div class="nav-section">
+      <div class="nav-section-label">Status</div>
+      <div class="nav-list">
+        ${statusItem('alert', 'Urgentes', countUrgentes(), 'trabalho', true)}
+        ${statusItem('clock', 'Prazos Hoje', countTasksToday() + countPersonalToday(), 'hoje', false)}
+        ${statusItem('share', 'Compartilhadas', countQuadroOpen(), 'quadro', false)}
+      </div>
+    </div>
+
+    <div class="side-divider"></div>
+    <div class="nav-section">
+      <div class="nav-section-label">Histórico</div>
+      <div class="nav-list">
+        ${statusItem('archive', 'Concluídos Hoje', countConcluidosHoje(), 'hoje', false)}
+        ${statusItem('clock', 'Melhor Sequência', bestStreak(), 'rotina', false)}
+      </div>
+    </div>
+
+    <div class="side-divider"></div>
+    <div class="nav-section">
+      <div class="nav-section-label">Documentos</div>
+      <div class="doc-search">
+        ${svgIcon('search', 14)}
+        <input type="text" id="tree-search-input" placeholder="Buscar em trabalho/pessoal..." oninput="onTreeSearch(this.value)" value="${treeSearch}">
+      </div>
+      <div id="doc-tree"></div>
+    </div>
+  `;
+  renderTreeInto();
+}
+function onNav(view) {
+  activeTreeId = null;
+  switchView(view);
+  renderSidebar();
+}
+
+/* ---------------- tag / pill helpers ---------------- */
+function tagLabel(tag) {
+  const map = { trabalho: 'Trabalho', treino: 'Treino', volei: 'Vôlei', futsal: 'Futsal', estudo: 'Estudo', sono: 'Sono', livre: 'Livre', almoco: 'Almoço' };
+  return tag ? (map[tag] || tag) : '';
+}
+
+/* ---------------- rendering: HOJE ---------------- */
+function renderHoje() {
+  const dateISO = todayISO();
+  const blocks = blocksForDate(dateISO);
+  const games = gamesOnDate(dateISO);
+  const conflicts = games.map(g => ({ g, block: gameConflict(g) })).filter(x => x.block);
+  const doneBlocks = blocks.filter(b => isBlockDone(dateISO, b.id)).length;
+  const pct = blocks.length ? Math.round((doneBlocks / blocks.length) * 100) : 0;
+
+  let html = `<div class="content-header">
+    <h1>Hoje</h1>
+    <div class="sub">${WEEKDAY_NAMES[weekdayOf(dateISO)]}, ${dateISO}</div>
+  </div>`;
+
+  html += `<div class="card">
+    <div class="card-title">Progresso do Dia</div>
+    <div class="card-sub">blocos da rotina concluídos</div>
+    <div class="stat-hero">
+      <span class="num">${doneBlocks}/${blocks.length}</span>
+      <span class="up-badge ${pct < 50 ? 'down' : ''}">${pct}%</span>
+    </div>
+    <button class="see-more" onclick="onNav('rotina')">Ver rotina completa ${svgIcon('arrowRight', 13)}</button>
+  </div>`;
+
+  if (conflicts.length) {
+    html += `<div class="card"><div class="card-title">Alertas de Conflito</div>`;
+    for (const c of conflicts) {
+      html += `<div class="alert-item">${svgIcon('alert', 15)}<span><b>${c.g.teamNome}</b> às ${c.g.hora} sobrepõe <b>${c.block.nome}</b> (${c.block.hora_inicio}–${c.block.hora_fim || ''}).</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  const rows = [];
+  for (const b of blocks) rows.push({ sortKey: timeToMin(b.hora_inicio), kind: 'block', data: b });
+  for (const g of games) rows.push({ sortKey: g.hora ? timeToMin(g.hora) : 1440, kind: 'game', data: g });
+  const workToday = STATE.workTasks.filter(t => t.prazo === dateISO && t.status !== 'concluido');
+  for (const t of workToday) rows.push({ sortKey: 1441, kind: 'work', data: t });
+  const personalToday = allPersonalWithOrigin().filter(x => x.item.data === dateISO && x.item.status !== 'concluido');
+  for (const p of personalToday) rows.push({ sortKey: 1442, kind: 'personal', data: p });
+  rows.sort((a, b) => a.sortKey - b.sortKey);
+
+  html += `<div class="card"><div class="card-title">Timeline de Hoje</div><div class="row-list">`;
+  if (!rows.length) html += `<div class="empty-note">nada agendado hoje...</div>`;
+  for (const r of rows) {
+    if (r.kind === 'block') {
+      const b = r.data;
+      const now = isBlockNow(b, dateISO);
+      const done = isBlockDone(dateISO, b.id);
+      html += `<div class="row-item timeline-row ${now ? 'now' : ''}">
+        <span class="r-time">${b.hora_inicio}</span>
+        <span class="r-text">${b.nome} ${b.tag ? `<span class="pill ${b.tag}">${tagLabel(b.tag)}</span>` : ''}</span>
+        <button class="check-circle ${done ? 'checked' : ''}" onclick="onToggleBlock('${b.id}')">${done ? '✓' : ''}</button>
+      </div>`;
+    } else if (r.kind === 'game') {
+      const g = r.data;
+      const hasConflict = gameConflict(g);
+      html += `<div class="row-item">
+        <span class="r-time">${g.hora || 'TBD'}</span>
+        <span class="r-text">🏟 ${g.teamNome} x ${g.adversario}</span>
+        ${hasConflict ? '<span class="pill warn">Conflito</span>' : ''}
+      </div>`;
+    } else if (r.kind === 'work') {
+      const t = r.data;
+      html += `<div class="row-item">
+        <span class="r-time">Prazo</span>
+        <span class="r-text">💼 ${t.titulo}</span>
+        <span class="pill ${t.tier}">${t.tier}</span>
+      </div>`;
+    } else if (r.kind === 'personal') {
+      html += `<div class="row-item">
+        <span class="r-time">Vence</span>
+        <span class="r-text">🏠 ${r.data.item.texto}</span>
+        <span class="pill origin">${r.data.origin}</span>
+      </div>`;
+    }
+  }
+  html += `</div></div>`;
+
+  html += `<div class="card"><div class="card-title">Hábitos Rápidos</div><div class="card-sub">toque para alternar</div>${renderHabitTiles(dateISO)}</div>`;
+
+  document.getElementById('view-hoje').innerHTML = html;
+}
+function renderHabitTiles(dateISO) {
+  const log = STATE.habitLog[dateISO] || {};
+  let html = '<div class="habit-tiles">';
+  for (const h of HABITS) {
+    const state = log[h.id] || 'none';
+    const icon = state === 'done' ? '✓' : state === 'skip' ? '–' : '○';
+    html += `<div class="habit-tile state-${state}" onclick="onQuickHabit('${h.id}')">
+      <div class="ht-state">${icon}</div>
+      <div class="ht-label">${h.nome}</div>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+function onToggleBlock(blockId) { toggleBlockDone(todayISO(), blockId); renderHoje(); renderSidebar(); }
+function onQuickHabit(habitId) {
+  const dateISO = todayISO();
+  if (!STATE.habitLog[dateISO]) STATE.habitLog[dateISO] = {};
+  const cur = STATE.habitLog[dateISO][habitId] || 'none';
+  const next = cur === 'none' ? 'done' : cur === 'done' ? 'skip' : 'none';
+  STATE.habitLog[dateISO][habitId] = next;
+  saveState();
+  renderHoje();
+  renderSidebar();
+}
+
+/* ---------------- rendering: ROTINA ---------------- */
+function renderRotina() {
+  let html = `<div class="content-header"><h1>Rotina</h1><div class="sub">grade semanal fixa e hábitos</div></div>`;
+  html += `<div class="card"><div class="card-title">Grade Semanal</div><div class="card-sub">blocos fixos por dia</div>`;
+  html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">`;
+  for (let d = 0; d < 7; d++) {
+    const blocks = ROUTINE[d];
+    html += `<div class="mini-stat" style="padding:12px">
+      <div class="lbl" style="margin-bottom:8px;font-size:11px">${WEEKDAY_SHORT[d]}</div>`;
+    for (const b of blocks) {
+      html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border-soft);font-size:11.5px">
+        <span style="font-weight:700;min-width:74px">${b.hora_inicio}${b.hora_fim ? '–' + b.hora_fim : ''}</span>
+        <span style="flex:1">${b.nome}</span>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div></div>`;
+
+  html += renderHabitsPanel();
+  document.getElementById('view-rotina').innerHTML = html;
+}
+function last30Dates() {
+  const out = [];
+  const d = new Date();
+  for (let i = 29; i >= 0; i--) { const dd = new Date(d); dd.setDate(d.getDate() - i); out.push(isoFromDate(dd)); }
+  return out;
+}
+function last7Dates() {
+  const out = [];
+  const d = new Date();
+  for (let i = 6; i >= 0; i--) { const dd = new Date(d); dd.setDate(d.getDate() - i); out.push(isoFromDate(dd)); }
+  return out;
+}
 function renderHabitsPanel() {
   const week = last7Dates();
-  let html = `<div class="panel"><div class="panel-title">Hábitos</div><div class="panel-sub">grid semanal · clique para alternar (vazio → feito → pulado)</div>`;
+  let html = `<div class="card"><div class="card-title">Hábitos</div><div class="card-sub">grid semanal · clique para alternar (vazio → feito → pulado)</div>`;
   html += `<div style="overflow-x:auto"><table class="habit-table"><thead><tr><th style="text-align:left">Hábito</th>`;
   for (const iso of week) html += `<th>${WEEKDAY_SHORT[weekdayOf(iso)]}</th>`;
   html += `</tr></thead><tbody>`;
@@ -499,13 +706,13 @@ function renderHabitsPanel() {
   }
   html += `</tbody></table></div>`;
 
-  html += `<div class="sec-divider"></div><div class="panel-sub">streaks</div><div class="stat-row">`;
+  html += `<div class="card-grid" style="margin-top:16px">`;
   for (const h of HABITS) {
-    html += `<div class="stat-box"><div class="num">${habitStreak(h.id)}</div><div class="lbl">${h.nome}</div></div>`;
+    html += `<div class="mini-stat"><div class="num">${habitStreak(h.id)}</div><div class="lbl">${h.nome}</div></div>`;
   }
   html += `</div>`;
 
-  html += `<div class="panel-sub" style="margin-top:12px">heatmap · últimos 30 dias (todos os hábitos)</div>`;
+  html += `<div class="card-sub" style="margin-top:16px">heatmap · últimos 30 dias (todos os hábitos)</div>`;
   html += `<div class="heatmap">`;
   for (const iso of last30Dates()) {
     const log = STATE.habitLog[iso] || {};
@@ -523,32 +730,33 @@ function onGridHabit(habitId, dateISO) {
   STATE.habitLog[dateISO][habitId] = next;
   saveState();
   renderRotina();
+  renderSidebar();
 }
 
 /* ---------------- rendering: TRABALHO ---------------- */
 function renderTrabalho() {
   refreshTiers();
-  const wrap = document.getElementById('view-trabalho');
-  let html = '';
-  for (const board of WORK_BOARDS) {
-    const tasks = STATE.workTasks.filter(t => t.board === board.id);
-    html += `<div class="panel"><div class="panel-title">${board.nome}</div>`;
-    html += `<div class="inline-form">
-      <input type="text" id="new-title-${board.id}" placeholder="Nova tarefa...">
-      <input type="date" id="new-prazo-${board.id}">
-      <button class="btn" onclick="onAddWorkTask('${board.id}')">+ Adicionar</button>
-    </div>`;
-    html += `<div class="kanban">`;
-    for (const col of STATUS_COLS) {
-      html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
-      const colTasks = tasks.filter(t => t.status === col.id);
-      if (!colTasks.length) html += `<div class="empty-note" style="font-size:14px">vazio</div>`;
-      for (const t of colTasks) html += renderWorkTaskCard(t);
-      html += `</div></div>`;
-    }
+  let html = `<div class="content-header"><h1>Trabalho</h1><div class="sub">3 boards · tier sobe automaticamente com o atraso</div></div>`;
+  html += `<div class="card">`;
+  html += `<div class="utabs">`;
+  for (const b of WORK_BOARDS) html += `<button class="${trabalhoActiveBoard === b.id ? 'active' : ''}" onclick="onTrabalhoBoardTab('${b.id}')">${b.nome}</button>`;
+  html += `</div>`;
+  html += `<div class="inline-form">
+    <input type="text" id="new-title-work" placeholder="Nova tarefa...">
+    <input type="date" id="new-prazo-work">
+    <button class="btn" onclick="onAddWorkTask()">+ Adicionar</button>
+  </div>`;
+  html += `<div class="kanban">`;
+  const tasks = STATE.workTasks.filter(t => t.board === trabalhoActiveBoard);
+  for (const col of STATUS_COLS) {
+    html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
+    const colTasks = tasks.filter(t => t.status === col.id);
+    if (!colTasks.length) html += `<div class="empty-note">vazio</div>`;
+    for (const t of colTasks) html += renderWorkTaskCard(t);
     html += `</div></div>`;
   }
-  wrap.innerHTML = html;
+  html += `</div></div>`;
+  document.getElementById('view-trabalho').innerHTML = html;
 }
 function renderWorkTaskCard(t) {
   const overdue = daysOverdue(t.prazo) > 0 && t.status !== 'concluido';
@@ -556,12 +764,10 @@ function renderWorkTaskCard(t) {
     <div class="t-title">${t.titulo}</div>
     <div class="t-meta">
       <span class="t-deadline">${t.prazo ? 'prazo ' + t.prazo + (overdue ? ' · atrasado' : '') : 'sem prazo'}</span>
-      <span class="tier-pill ${t.tier}">${t.tier}</span>
+      <span class="pill ${t.tier}">${t.tier}</span>
     </div>
-    <div class="t-meta" style="margin-top:4px">
-      <label style="font-size:10px;display:flex;align-items:center;gap:4px;cursor:pointer">
-        <input type="checkbox" ${t.compartilhada ? 'checked' : ''} onchange="onToggleWorkShared('${t.id}')"> compartilhada
-      </label>
+    <div class="t-share-row">
+      <input type="checkbox" ${t.compartilhada ? 'checked' : ''} onchange="onToggleWorkShared('${t.id}')"> compartilhada
     </div>
     <div class="t-actions">
       <button onclick="onMoveWork('${t.id}',-1)" ${t.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
@@ -570,32 +776,37 @@ function renderWorkTaskCard(t) {
     </div>
   </div>`;
 }
-function onAddWorkTask(boardId) {
-  const titleEl = document.getElementById(`new-title-${boardId}`);
-  const prazoEl = document.getElementById(`new-prazo-${boardId}`);
+function onTrabalhoBoardTab(id) { trabalhoActiveBoard = id; renderTrabalho(); }
+function onAddWorkTask() {
+  const titleEl = document.getElementById('new-title-work');
+  const prazoEl = document.getElementById('new-prazo-work');
   const titulo = titleEl.value.trim();
   if (!titulo) return;
-  STATE.workTasks.push({ id: 'w' + Date.now() + Math.random().toString(36).slice(2, 6), board: boardId, titulo, prazo: prazoEl.value || null, status: 'a_fazer', tier: 'normal', compartilhada: false });
+  STATE.workTasks.push({ id: 'w' + Date.now() + Math.random().toString(36).slice(2, 6), board: trabalhoActiveBoard, titulo, prazo: prazoEl.value || null, status: 'a_fazer', tier: 'normal', compartilhada: false });
   saveState();
   renderTrabalho();
+  renderSidebar();
 }
 function onMoveWork(id, dir) {
   const t = STATE.workTasks.find(x => x.id === id);
   if (t) t.status = cycleStatus(t.status, dir);
   saveState();
   renderTrabalho();
+  renderSidebar();
 }
 function onDeleteWork(id) {
   const idx = STATE.workTasks.findIndex(x => x.id === id);
   if (idx >= 0) STATE.workTasks.splice(idx, 1);
   saveState();
   renderTrabalho();
+  renderSidebar();
 }
 function onToggleWorkShared(id) {
   const t = STATE.workTasks.find(x => x.id === id);
   if (t) t.compartilhada = !t.compartilhada;
   saveState();
   renderTrabalho();
+  renderSidebar();
 }
 
 /* ---------------- rendering: PESSOAL ---------------- */
@@ -607,77 +818,73 @@ const PESSOAL_SUBTABS = [
   { id: 'residencial', label: 'Residencial' },
   { id: 'veiculos', label: 'Veículos' },
 ];
-let pessoalSub = 'diario';
 function renderPessoal() {
-  const wrap = document.getElementById('view-pessoal');
-  let html = `<div class="sub-tabs">`;
+  let html = `<div class="content-header"><h1>Pessoal</h1><div class="sub">rotina, finanças, objetivos e casa</div></div>`;
+  html += `<div class="utabs">`;
   for (const s of PESSOAL_SUBTABS) html += `<button class="${pessoalSub === s.id ? 'active' : ''}" onclick="onPessoalSub('${s.id}')">${s.label}</button>`;
   html += `</div>`;
 
   if (pessoalSub === 'diario') {
-    html += `<div class="grid-2">`;
+    html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">`;
     for (const s of PERSONAL_SIMPLE) html += simpleListPanel(s.label, s.key);
     html += `</div>`;
   } else if (pessoalSub === 'financas') {
-    html += valueListPanel('Finanças · Contas a Pagar', 'financas', { withValor: true, withData: true, dataLabel: 'vencimento' });
+    html += valueListPanel('Finanças · Contas a Pagar', 'financas', { withValor: true, withData: true });
   } else if (pessoalSub === 'objetivos') {
-    html += valueListPanel('Objetivos e Metas', 'objetivos', { withValor: false, withData: true, dataLabel: 'prazo' });
+    html += valueListPanel('Objetivos e Metas', 'objetivos', { withValor: false, withData: true });
   } else if (pessoalSub === 'wishlist') {
     html += valueListPanel('Wish List', 'wishlist', { withValor: true, withData: false });
   } else if (pessoalSub === 'residencial') {
-    html += `<div class="grid-2">`;
+    html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">`;
     html += valueListPanel('Limpeza da Casa', 'residencial.limpeza', { withValor: false, withData: false });
     html += valueListPanel('Troca de Lixo', 'residencial.lixo', { withValor: false, withData: false });
-    html += valueListPanel('Cuidados com os Gatos', 'residencial.gatos', { withValor: false, withData: true, dataLabel: 'data' });
+    html += valueListPanel('Cuidados com os Gatos', 'residencial.gatos', { withValor: false, withData: true });
     html += `</div>`;
   } else if (pessoalSub === 'veiculos') {
-    html += valueListPanel('Veículos', 'veiculos', { withValor: false, withData: true, dataLabel: 'data' });
+    html += valueListPanel('Veículos', 'veiculos', { withValor: false, withData: true });
   }
-  wrap.innerHTML = html;
+  document.getElementById('view-pessoal').innerHTML = html;
 }
-function onPessoalSub(id) { pessoalSub = id; renderPessoal(); }
+function onPessoalSub(id) { pessoalSub = id; activeTreeId = null; renderPessoal(); renderSidebar(); }
 
 function simpleListPanel(label, key) {
-  const dateISO = todayISO();
-  const log = STATE.habitLog; // not used, simple list is independent of date
   const list = STATE.personal[key];
-  let html = `<div class="panel"><div class="panel-title" style="font-size:20px">${label}</div>`;
+  let html = `<div class="card"><div class="card-title">${label}</div>`;
   html += `<div class="inline-form"><input type="text" id="new-${key}" placeholder="Adicionar item..."><button class="btn" onclick="onAddSimple('${key}')">+</button></div>`;
-  html += `<ul class="simple-list">`;
-  if (!list.length) html += `<li class="empty-note">nada por aqui ainda</li>`;
+  html += `<div class="row-list">`;
+  if (!list.length) html += `<div class="empty-note">nada por aqui ainda</div>`;
   for (const item of list) {
-    html += `<li class="${item.status === 'concluido' ? 'done' : ''}">
-      <div class="check-box ${item.status === 'concluido' ? 'checked' : ''}" onclick="onTogglePersonal('${key}','${item.id}')"></div>
-      <span class="li-text">${item.texto}</span>
-      <button class="x" onclick="onRemovePersonal('${key}','${item.id}')">✕</button>
-    </li>`;
+    html += `<div class="row-item ${item.status === 'concluido' ? 'done' : ''}">
+      <div class="check-circle ${item.status === 'concluido' ? 'checked' : ''}" onclick="onTogglePersonal('${key}','${item.id}')">${item.status === 'concluido' ? '✓' : ''}</div>
+      <span class="r-text">${item.texto}</span>
+      <button class="btn ghost" style="padding:3px 8px" onclick="onRemovePersonal('${key}','${item.id}')">✕</button>
+    </div>`;
   }
-  html += `</ul></div>`;
+  html += `</div></div>`;
   return html;
 }
 function valueListPanel(label, path, opts) {
   const list = personalListRef(path);
   const idPrefix = path.replace('.', '-');
-  let html = `<div class="panel"><div class="panel-title" style="font-size:20px">${label}</div>`;
-  html += `<div class="inline-form">
-    <input type="text" id="new-txt-${idPrefix}" placeholder="Descrição...">`;
+  let html = `<div class="card"><div class="card-title">${label}</div>`;
+  html += `<div class="inline-form"><input type="text" id="new-txt-${idPrefix}" placeholder="Descrição...">`;
   if (opts.withValor) html += `<input type="number" id="new-val-${idPrefix}" placeholder="Valor R$" style="width:100px">`;
   if (opts.withData) html += `<input type="date" id="new-date-${idPrefix}">`;
   html += `<button class="btn" onclick="onAddValue('${path}','${idPrefix}',${opts.withValor},${opts.withData})">+ Adicionar</button></div>`;
-  html += `<ul class="simple-list">`;
-  if (!list.length) html += `<li class="empty-note">nada por aqui ainda</li>`;
+  html += `<div class="row-list">`;
+  if (!list.length) html += `<div class="empty-note">nada por aqui ainda</div>`;
   for (const item of list) {
-    html += `<li class="${item.status === 'concluido' ? 'done' : ''}">
-      <div class="check-box ${item.status === 'concluido' ? 'checked' : ''}" onclick="onTogglePersonal('${path}','${item.id}')"></div>
-      <span class="li-text">${item.texto}</span>
-      <span class="li-meta">${item.valor ? 'R$ ' + item.valor : ''} ${item.data ? '· ' + item.data : ''}</span>
-      <label style="font-size:10px;display:flex;align-items:center;gap:3px;cursor:pointer">
+    html += `<div class="row-item ${item.status === 'concluido' ? 'done' : ''}">
+      <div class="check-circle ${item.status === 'concluido' ? 'checked' : ''}" onclick="onTogglePersonal('${path}','${item.id}')">${item.status === 'concluido' ? '✓' : ''}</div>
+      <span class="r-text">${item.texto}</span>
+      <span class="r-meta">${item.valor ? 'R$ ' + item.valor : ''} ${item.data ? '· ' + item.data : ''}</span>
+      <label style="font-size:10.5px;display:flex;align-items:center;gap:3px;color:var(--text-muted);cursor:pointer">
         <input type="checkbox" ${item.compartilhada ? 'checked' : ''} onchange="onToggleSharedPersonal('${path}','${item.id}')"> compartilhada
       </label>
-      <button class="x" onclick="onRemovePersonal('${path}','${item.id}')">✕</button>
-    </li>`;
+      <button class="btn ghost" style="padding:3px 8px" onclick="onRemovePersonal('${path}','${item.id}')">✕</button>
+    </div>`;
   }
-  html += `</ul></div>`;
+  html += `</div></div>`;
   return html;
 }
 function onAddSimple(key) {
@@ -687,6 +894,7 @@ function onAddSimple(key) {
   addPersonalItem(key, texto);
   el.value = '';
   renderPessoal();
+  renderSidebar();
 }
 function onAddValue(path, idPrefix, withValor, withData) {
   const txtEl = document.getElementById(`new-txt-${idPrefix}`);
@@ -696,20 +904,18 @@ function onAddValue(path, idPrefix, withValor, withData) {
   const data = withData ? document.getElementById(`new-date-${idPrefix}`).value || null : null;
   addPersonalItem(path, texto, valor, data);
   renderPessoal();
+  renderSidebar();
 }
-function onTogglePersonal(path, id) { togglePersonalDone(path, id); renderPessoal(); }
-function onToggleSharedPersonal(path, id) { toggleShared(path, id); renderPessoal(); renderQuadro(); }
-function onRemovePersonal(path, id) { removePersonalItem(path, id); renderPessoal(); }
+function onTogglePersonal(path, id) { togglePersonalDone(path, id); renderPessoal(); renderSidebar(); }
+function onToggleSharedPersonal(path, id) { toggleShared(path, id); renderPessoal(); renderSidebar(); }
+function onRemovePersonal(path, id) { removePersonalItem(path, id); renderPessoal(); renderSidebar(); }
 
 /* ---------------- rendering: JOGOS ---------------- */
 function renderJogos() {
-  const wrap = document.getElementById('view-jogos');
-  let html = '';
+  let html = `<div class="content-header"><h1>Jogos</h1><div class="sub">times acompanhados · fuso Cuiabá/MT (UTC-4)</div></div>`;
   for (const [teamId, team] of Object.entries(TEAMS)) {
-    html += `<div class="panel"><div class="panel-title">${team.nome}</div><div class="panel-sub">${team.liga}</div>`;
-    if (!team.fixtures.length) {
-      html += `<div class="empty-note">sem jogos confirmados no momento — recheck em breve.</div>`;
-    }
+    html += `<div class="card"><div class="card-title">${team.nome}</div><div class="card-sub">${team.liga}</div>`;
+    if (!team.fixtures.length) html += `<div class="empty-note">sem jogos confirmados no momento — recheck em breve.</div>`;
     for (const f of team.fixtures) {
       const conflict = gameConflict(f);
       html += `<div class="game-row comp-${f.competicao}">
@@ -718,34 +924,33 @@ function renderJogos() {
           <div class="g-matchup">${team.nome} ${f.mandante ? 'x' : '@'} ${f.adversario}</div>
           <div class="g-comp">${COMP_LABEL[f.competicao] || f.competicao} · ${f.data}</div>
         </div>
-        <span class="badge-mando">${f.mandante ? 'CASA' : 'FORA'}</span>
-        ${conflict ? `<span class="badge-conflict">⚠️ Conflito: ${conflict.nome}</span>` : ''}
-        <div class="g-time">${f.hora || '<span class="badge-tbd">TBD</span>'}</div>
+        <span class="pill ${f.mandante ? 'origin' : 'normal'}">${f.mandante ? 'CASA' : 'FORA'}</span>
+        ${conflict ? `<span class="pill warn">⚠ ${conflict.nome}</span>` : ''}
+        <div class="g-time">${f.hora || '<span class="pill tbd">TBD</span>'}</div>
       </div>`;
     }
     html += `</div>`;
   }
-  html += `<div class="panel"><div class="panel-sub">Horários no fuso de Cuiabá/MT (UTC-4). Jogos do Brasileirão marcados como TBD costumam ser divulgados na quinta-feira da semana do jogo — recheck recomendado.</div></div>`;
-  wrap.innerHTML = html;
+  html += `<div class="card"><div class="card-sub" style="margin-bottom:0">Jogos do Brasileirão marcados como TBD costumam ser divulgados na quinta-feira da semana do jogo — recheck recomendado.</div></div>`;
+  document.getElementById('view-jogos').innerHTML = html;
 }
 
 /* ---------------- rendering: QUADRO CONJUNTO ---------------- */
 function renderQuadro() {
-  const wrap = document.getElementById('view-quadro');
   const workShared = STATE.workTasks.filter(t => t.compartilhada).map(t => ({ id: t.id, texto: t.titulo, status: t.status, origin: 'Trabalho', kind: 'work' }));
   const personalShared = allPersonalWithOrigin().filter(x => x.item.compartilhada).map(x => ({ id: x.item.id, texto: x.item.texto, status: x.item.status, origin: x.origin, path: x.path, kind: 'personal' }));
   const all = [...workShared, ...personalShared];
 
-  let html = `<div class="panel"><div class="panel-title">Quadro Conjunto</div><div class="panel-sub">tarefas compartilhadas / que dependem de terceiros, de qualquer área</div>`;
-  html += `<div class="kanban">`;
+  let html = `<div class="content-header"><h1>Quadro Conjunto</h1><div class="sub">tarefas compartilhadas / que dependem de terceiros, de qualquer área</div></div>`;
+  html += `<div class="card"><div class="kanban">`;
   for (const col of STATUS_COLS) {
     html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
     const items = all.filter(i => i.status === col.id);
-    if (!items.length) html += `<div class="empty-note" style="font-size:14px">vazio</div>`;
+    if (!items.length) html += `<div class="empty-note">vazio</div>`;
     for (const i of items) {
       html += `<div class="task-card">
         <div class="t-title">${i.texto}</div>
-        <div class="t-meta"><span class="origin-pill">${i.origin}</span></div>
+        <div class="t-meta"><span class="pill origin">${i.origin}</span></div>
         <div class="t-actions">
           <button onclick="onMoveQuadro('${i.kind}','${i.id}','${i.path || ''}',-1)" ${i.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
           <button onclick="onMoveQuadro('${i.kind}','${i.id}','${i.path || ''}',1)" ${i.status === 'concluido' ? 'disabled' : ''}>▶</button>
@@ -755,7 +960,7 @@ function renderQuadro() {
     html += `</div></div>`;
   }
   html += `</div></div>`;
-  wrap.innerHTML = html;
+  document.getElementById('view-quadro').innerHTML = html;
 }
 function onMoveQuadro(kind, id, path, dir) {
   if (kind === 'work') {
@@ -768,37 +973,71 @@ function onMoveQuadro(kind, id, path, dir) {
   }
   saveState();
   renderQuadro();
+  renderSidebar();
 }
 
-/* ---------------- tabs ---------------- */
-const TABS = ['hoje', 'rotina', 'trabalho', 'pessoal', 'jogos', 'quadro'];
-function switchTab(tab) {
-  for (const t of TABS) {
-    document.getElementById(`view-${t}`).classList.toggle('active-view', t === tab);
-    document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
-    document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
-  }
-  if (tab === 'hoje') renderHoje();
-  else if (tab === 'rotina') renderRotina();
-  else if (tab === 'trabalho') renderTrabalho();
-  else if (tab === 'pessoal') renderPessoal();
-  else if (tab === 'jogos') renderJogos();
-  else if (tab === 'quadro') renderQuadro();
-  window.location.hash = tab;
+/* ---------------- view switching ---------------- */
+function switchView(view) {
+  currentView = view;
+  for (const t of TABS) document.getElementById(`view-${t}`).classList.toggle('hidden', t !== view);
+  document.querySelectorAll('.rail-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
+  if (view === 'hoje') renderHoje();
+  else if (view === 'rotina') renderRotina();
+  else if (view === 'trabalho') renderTrabalho();
+  else if (view === 'pessoal') renderPessoal();
+  else if (view === 'jogos') renderJogos();
+  else if (view === 'quadro') renderQuadro();
+  window.location.hash = view;
+  closeMobileSidebar();
+}
+
+/* ---------------- mobile sidebar ---------------- */
+function toggleMobileSidebar() {
+  const shell = document.getElementById('app-shell');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const opening = !shell.classList.contains('sidebar-open');
+  shell.classList.toggle('sidebar-open', opening);
+  backdrop.classList.toggle('hidden', !opening);
+}
+function closeMobileSidebar() {
+  document.getElementById('app-shell').classList.remove('sidebar-open');
+  document.getElementById('sidebar-backdrop').classList.add('hidden');
+}
+
+/* ---------------- settings modal ---------------- */
+function openSettings() {
+  const modal = document.getElementById('settings-modal');
+  const body = document.getElementById('settings-body');
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  const notifPerm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  body.innerHTML = `
+    <div class="settings-row">
+      <div><div class="sr-label">Notificações locais</div><div class="sr-sub">início de bloco, prazos e jogos próximos</div></div>
+      ${notifPerm === 'granted' ? `<span class="pill origin">ativas</span>` : `<button class="btn" onclick="requestNotifPermission()">Ativar</button>`}
+    </div>
+    <div class="settings-row">
+      <div><div class="sr-label">Aviso antes do jogo</div><div class="sr-sub">minutos de antecedência</div></div>
+      <input type="number" min="1" max="120" value="${STATE.notif.leadMinutes}" onchange="onLeadMinutesChange(this.value)">
+    </div>
+    <div class="settings-row">
+      <div><div class="sr-label">Instalar como app</div><div class="sr-sub">${standalone ? 'já instalado nesta sessão' : 'iPhone: Safari → Compartilhar → Adicionar à Tela de Início. Android/Chrome: menu → Instalar app. Assim as notificações chegam na Central de Notificações (e no Apple Watch pareado).'}</div></div>
+    </div>
+  `;
+  modal.classList.remove('hidden');
+}
+function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
+function onLeadMinutesChange(v) { STATE.notif.leadMinutes = Math.max(1, parseInt(v, 10) || 15); saveState(); }
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return;
+  await Notification.requestPermission();
+  openSettings();
 }
 
 /* ---------------- notifications ---------------- */
-async function requestNotifPermission() {
-  if (!('Notification' in window)) return;
-  const perm = await Notification.requestPermission();
-  document.getElementById('install-banner').classList.toggle('hidden', perm !== 'default');
-}
 function fireNotification(title, body) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, { body, icon: 'icons/icon.svg' })).catch(() => {
-      new Notification(title, { body });
-    });
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, { body, icon: 'icons/icon.svg' })).catch(() => { new Notification(title, { body }); });
   } else {
     new Notification(title, { body });
   }
@@ -844,39 +1083,36 @@ function checkNotifications() {
   }
 }
 
-/* ---------------- PWA install banner ---------------- */
-function setupInstallBanner() {
-  const banner = document.getElementById('install-banner');
-  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  if (standalone) { banner.classList.add('hidden'); return; }
-  if (STATE.installDismissed) { banner.classList.add('hidden'); return; }
-  banner.classList.remove('hidden');
-  document.getElementById('dismiss-install').onclick = () => {
-    STATE.installDismissed = true; saveState(); banner.classList.add('hidden');
-  };
-  document.getElementById('enable-notif').onclick = requestNotifPermission;
-}
-
 /* ---------------- init ---------------- */
 function init() {
-  for (const t of TABS) document.getElementById(`tab-${t}`).addEventListener('click', () => switchTab(t));
-  renderHeader();
-  renderBarcode();
-  setupInstallBanner();
+  document.querySelector('.rail-logo').innerHTML = svgIcon('asterisk', 18);
+  document.getElementById('mobile-toggle').innerHTML = svgIcon('menu', 18);
+  document.getElementById('btn-settings').innerHTML = svgIcon('gear', 18);
+
+  const iconMap = { hoje: 'home', rotina: 'calendar', trabalho: 'briefcase', pessoal: 'heart', jogos: 'trophy', quadro: 'layers' };
+  document.querySelectorAll('.rail-btn').forEach(btn => {
+    btn.innerHTML = svgIcon(iconMap[btn.dataset.view], 18);
+    btn.addEventListener('click', () => onNav(btn.dataset.view));
+  });
+
+  document.getElementById('btn-settings').addEventListener('click', openSettings);
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  document.getElementById('settings-modal').addEventListener('click', (e) => { if (e.target.id === 'settings-modal') closeSettings(); });
+  document.getElementById('mobile-toggle').addEventListener('click', toggleMobileSidebar);
+  document.getElementById('sidebar-backdrop').addEventListener('click', closeMobileSidebar);
+
   refreshTiers();
+  renderSidebar();
 
   const initial = (window.location.hash || '#hoje').replace('#', '');
-  switchTab(TABS.includes(initial) ? initial : 'hoje');
+  switchView(TABS.includes(initial) ? initial : 'hoje');
 
-  setInterval(renderHeader, 15000);
   setInterval(() => {
     checkNotifications();
-    if (document.getElementById('view-hoje').classList.contains('active-view')) renderHoje();
+    if (currentView === 'hoje') { renderHoje(); renderSidebar(); }
   }, 30000);
   checkNotifications();
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 document.addEventListener('DOMContentLoaded', init);
