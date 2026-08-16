@@ -170,7 +170,7 @@ function loadState() {
     return defaultState();
   }
 }
-function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(STATE)); }
+function saveState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(STATE)); } catch (e) { /* storage unavailable (e.g. sandboxed preview) — keep running in-memory */ } }
 
 /* ---------------- routine helpers ---------------- */
 function blocksForDate(dateISO) { return ROUTINE[weekdayOf(dateISO)] || []; }
