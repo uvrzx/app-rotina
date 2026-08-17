@@ -301,6 +301,11 @@ function defaultState() {
     version: 1,
     routineCompletion: {},
     habitLog: {},
+    workBoards: [
+      { id: 'projeto-yt', nome: 'Projeto Yt' },
+      { id: 'imobiliaria', nome: 'Imobiliária' },
+      { id: 'prospeccao-ativa', nome: 'Prospecção Ativa' },
+    ],
     workTasks: [
       { id: 'w1', board: 'projeto-yt', titulo: 'Roteiro ep. 12', prazo: '2026-08-10', status: 'em_andamento', tier: 'normal', compartilhada: false },
       { id: 'w2', board: 'projeto-yt', titulo: 'Editar ep. 11', prazo: '2026-08-02', status: 'a_fazer', tier: 'normal', compartilhada: false },
@@ -308,8 +313,14 @@ function defaultState() {
       { id: 'w4', board: 'imobiliaria', titulo: 'Vistoria imóvel novo', prazo: '2026-08-01', status: 'a_fazer', tier: 'normal', compartilhada: false },
       { id: 'w5', board: 'prospeccao-ativa', titulo: 'Ligar 20 leads frios', prazo: '2026-08-03', status: 'a_fazer', tier: 'normal', compartilhada: false },
     ],
+    pessoalLabels: {
+      diario: 'Diário', financas: 'Finanças', objetivos: 'Objetivos',
+      wishlist: 'Wish List', residencial: 'Residencial', veiculos: 'Veículos',
+    },
     personal: {
       alimentacao: [], hidratacao: [], atividade: [], cuidados: [], estudos: [],
+      simpleLabels: { alimentacao: 'Alimentação', hidratacao: 'Hidratação', atividade: 'Atividade Física', cuidados: 'Cuidados', estudos: 'Estudos' },
+      customLists: {},
       financas: [
         { id: 'f1', texto: 'Aluguel', valor: 1800, data: '2026-08-05', status: 'a_fazer', compartilhada: false },
         { id: 'f2', texto: 'Internet', valor: 120, data: '2026-08-10', status: 'a_fazer', compartilhada: false },
@@ -362,10 +373,16 @@ function loadState() {
     return {
       ...def, ...parsed,
       notif: { ...def.notif, ...(parsed.notif || {}) },
-      personal: { ...def.personal, ...(parsed.personal || {}) },
+      personal: {
+        ...def.personal, ...(parsed.personal || {}),
+        simpleLabels: { ...def.personal.simpleLabels, ...((parsed.personal && parsed.personal.simpleLabels) || {}) },
+        customLists: { ...def.personal.customLists, ...((parsed.personal && parsed.personal.customLists) || {}) },
+      },
       fitness: { ...def.fitness, ...(parsed.fitness || {}) },
       navConfig: mergeNavConfig(def.navConfig, parsed.navConfig),
       customTabs: { ...def.customTabs, ...(parsed.customTabs || {}) },
+      workBoards: (parsed.workBoards && parsed.workBoards.length) ? parsed.workBoards : def.workBoards,
+      pessoalLabels: { ...def.pessoalLabels, ...(parsed.pessoalLabels || {}) },
     };
   } catch (e) {
     return defaultState();
@@ -438,11 +455,22 @@ function refreshTiers() {
   }
   if (changed) saveState();
 }
-const WORK_BOARDS = [
-  { id: 'projeto-yt', nome: 'Projeto Yt' },
-  { id: 'imobiliaria', nome: 'Imobiliária' },
-  { id: 'prospeccao-ativa', nome: 'Prospecção Ativa' },
-];
+function addWorkBoard(nome) {
+  const id = 'wb' + Date.now() + Math.random().toString(36).slice(2, 6);
+  STATE.workBoards.push({ id, nome });
+  saveState();
+  return id;
+}
+function renameWorkBoard(id, nome) {
+  const b = STATE.workBoards.find(x => x.id === id);
+  if (b) { b.nome = nome; saveState(); }
+}
+function deleteWorkBoard(id) {
+  if (STATE.workBoards.length <= 1) return;
+  STATE.workBoards = STATE.workBoards.filter(b => b.id !== id);
+  STATE.workTasks = STATE.workTasks.filter(t => t.board !== id);
+  saveState();
+}
 const STATUS_COLS = [
   { id: 'a_fazer', nome: 'A Fazer' },
   { id: 'em_andamento', nome: 'Em Andamento' },
@@ -456,16 +484,37 @@ function cycleStatus(current, dir) {
 }
 
 /* ---------------- personal generic lists ---------------- */
-const PERSONAL_SIMPLE = [
-  { key: 'alimentacao', label: 'Alimentação' },
-  { key: 'hidratacao', label: 'Hidratação' },
-  { key: 'atividade', label: 'Atividade Física' },
-  { key: 'cuidados', label: 'Cuidados' },
-  { key: 'estudos', label: 'Estudos' },
-];
+const PERSONAL_SIMPLE_KEYS = ['alimentacao', 'hidratacao', 'atividade', 'cuidados', 'estudos'];
+function simpleLabel(key) { return STATE.personal.simpleLabels[key] || key; }
+function renameSimpleLabel(key, label) { STATE.personal.simpleLabels[key] = label; saveState(); }
 function personalListRef(path) {
   if (path.startsWith('residencial.')) return STATE.personal.residencial[path.split('.')[1]];
+  if (path.startsWith('custom.')) return STATE.personal.customLists[path.split('.')[1]].items;
   return STATE.personal[path];
+}
+function addPessoalCategory(label) {
+  const id = 'pc' + Date.now() + Math.random().toString(36).slice(2, 6);
+  const order = Object.keys(STATE.personal.customLists).length + Object.keys(STATE.pessoalLabels).length;
+  STATE.personal.customLists[id] = { id, label, order, items: [] };
+  saveState();
+  return id;
+}
+function renamePessoalCategory(id, label, isBuiltin) {
+  if (isBuiltin) { STATE.pessoalLabels[id] = label; }
+  else if (STATE.personal.customLists[id]) { STATE.personal.customLists[id].label = label; }
+  saveState();
+}
+function deletePessoalCategory(id) {
+  delete STATE.personal.customLists[id];
+  saveState();
+}
+function allPessoalTabs() {
+  const builtins = ['diario', 'financas', 'objetivos', 'wishlist', 'residencial', 'veiculos']
+    .map(id => ({ id, label: STATE.pessoalLabels[id] || id, builtin: true }));
+  const customs = Object.values(STATE.personal.customLists)
+    .sort((a, b) => a.order - b.order)
+    .map(c => ({ id: 'custom.' + c.id, label: c.label, builtin: false }));
+  return [...builtins, ...customs];
 }
 function openCount(list) { return list.filter(i => i.status !== 'concluido').length; }
 function addPersonalItem(path, texto, valor, data) {
@@ -493,14 +542,17 @@ function removePersonalItem(path, id) {
 }
 function allPersonalWithOrigin() {
   const out = [];
-  for (const s of PERSONAL_SIMPLE) for (const item of STATE.personal[s.key]) out.push({ item, origin: s.label, path: s.key });
+  for (const key of PERSONAL_SIMPLE_KEYS) for (const item of STATE.personal[key]) out.push({ item, origin: simpleLabel(key), path: key });
   for (const [subKey, subLabel] of [['limpeza', 'Limpeza da Casa'], ['lixo', 'Troca de Lixo'], ['gatos', 'Cuidados com os Gatos']]) {
-    for (const item of STATE.personal.residencial[subKey]) out.push({ item, origin: 'Residencial · ' + subLabel, path: 'residencial.' + subKey });
+    for (const item of STATE.personal.residencial[subKey]) out.push({ item, origin: (STATE.pessoalLabels.residencial || 'Residencial') + ' · ' + subLabel, path: 'residencial.' + subKey });
   }
-  for (const item of STATE.personal.financas) out.push({ item, origin: 'Finanças', path: 'financas' });
-  for (const item of STATE.personal.objetivos) out.push({ item, origin: 'Objetivos', path: 'objetivos' });
-  for (const item of STATE.personal.wishlist) out.push({ item, origin: 'Wish List', path: 'wishlist' });
-  for (const item of STATE.personal.veiculos) out.push({ item, origin: 'Veículos', path: 'veiculos' });
+  for (const item of STATE.personal.financas) out.push({ item, origin: STATE.pessoalLabels.financas || 'Finanças', path: 'financas' });
+  for (const item of STATE.personal.objetivos) out.push({ item, origin: STATE.pessoalLabels.objetivos || 'Objetivos', path: 'objetivos' });
+  for (const item of STATE.personal.wishlist) out.push({ item, origin: STATE.pessoalLabels.wishlist || 'Wish List', path: 'wishlist' });
+  for (const item of STATE.personal.veiculos) out.push({ item, origin: STATE.pessoalLabels.veiculos || 'Veículos', path: 'veiculos' });
+  for (const c of Object.values(STATE.personal.customLists)) {
+    for (const item of c.items) out.push({ item, origin: c.label, path: 'custom.' + c.id });
+  }
   return out;
 }
 
@@ -687,22 +739,22 @@ let treeIndex = {};
 function buildTree() {
   return [
     {
-      id: 'node-trabalho', label: 'Trabalho', count: countTrabalhoOpen(),
-      children: WORK_BOARDS.map(b => ({
+      id: 'node-trabalho', label: navLabel('trabalho'), count: countTrabalhoOpen(),
+      children: STATE.workBoards.map(b => ({
         id: 'board-' + b.id, label: b.nome,
         count: openCount(STATE.workTasks.filter(t => t.board === b.id)),
         action: () => { trabalhoActiveBoard = b.id; activeTreeId = 'board-' + b.id; switchView('trabalho'); renderSidebar(); },
       })),
     },
     {
-      id: 'node-pessoal', label: 'Pessoal', count: countPessoalOpen(),
+      id: 'node-pessoal', label: navLabel('pessoal'), count: countPessoalOpen(),
       children: [
-        { id: 'p-diario', label: 'Diário', count: PERSONAL_SIMPLE.reduce((s, x) => s + openCount(STATE.personal[x.key]), 0), action: () => openPessoalTree('diario', 'p-diario') },
-        { id: 'p-financas', label: 'Finanças', count: openCount(STATE.personal.financas), action: () => openPessoalTree('financas', 'p-financas') },
-        { id: 'p-objetivos', label: 'Objetivos', count: openCount(STATE.personal.objetivos), action: () => openPessoalTree('objetivos', 'p-objetivos') },
-        { id: 'p-wishlist', label: 'Wish List', count: openCount(STATE.personal.wishlist), action: () => openPessoalTree('wishlist', 'p-wishlist') },
+        { id: 'p-diario', label: STATE.pessoalLabels.diario, count: PERSONAL_SIMPLE_KEYS.reduce((s, k) => s + openCount(STATE.personal[k]), 0), action: () => openPessoalTree('diario', 'p-diario') },
+        { id: 'p-financas', label: STATE.pessoalLabels.financas, count: openCount(STATE.personal.financas), action: () => openPessoalTree('financas', 'p-financas') },
+        { id: 'p-objetivos', label: STATE.pessoalLabels.objetivos, count: openCount(STATE.personal.objetivos), action: () => openPessoalTree('objetivos', 'p-objetivos') },
+        { id: 'p-wishlist', label: STATE.pessoalLabels.wishlist, count: openCount(STATE.personal.wishlist), action: () => openPessoalTree('wishlist', 'p-wishlist') },
         {
-          id: 'node-residencial', label: 'Residencial',
+          id: 'node-residencial', label: STATE.pessoalLabels.residencial,
           count: openCount(STATE.personal.residencial.limpeza) + openCount(STATE.personal.residencial.lixo) + openCount(STATE.personal.residencial.gatos),
           children: [
             { id: 'p-limpeza', label: 'Limpeza da Casa', count: openCount(STATE.personal.residencial.limpeza), action: () => openPessoalTree('residencial', 'p-limpeza') },
@@ -710,7 +762,11 @@ function buildTree() {
             { id: 'p-gatos', label: 'Cuidados com os Gatos', count: openCount(STATE.personal.residencial.gatos), action: () => openPessoalTree('residencial', 'p-gatos') },
           ],
         },
-        { id: 'p-veiculos', label: 'Veículos', count: openCount(STATE.personal.veiculos), action: () => openPessoalTree('veiculos', 'p-veiculos') },
+        { id: 'p-veiculos', label: STATE.pessoalLabels.veiculos, count: openCount(STATE.personal.veiculos), action: () => openPessoalTree('veiculos', 'p-veiculos') },
+        ...Object.values(STATE.personal.customLists).map(c => ({
+          id: 'p-custom-' + c.id, label: c.label, count: openCount(c.items),
+          action: () => openPessoalTree('custom.' + c.id, 'p-custom-' + c.id),
+        })),
       ],
     },
   ];
@@ -1109,11 +1165,17 @@ let trabalhoCalMonth = todayISO().slice(0, 7);
 
 function renderTrabalho() {
   refreshTiers();
-  let html = `<div class="content-header"><h1>${navLabel('trabalho')}</h1><div class="sub">3 boards · tier sobe automaticamente com o atraso</div></div>`;
+  if (!STATE.workBoards.find(b => b.id === trabalhoActiveBoard)) trabalhoActiveBoard = STATE.workBoards[0].id;
+  let html = `<div class="content-header"><h1>${navLabel('trabalho')}</h1><div class="sub">${STATE.workBoards.length} board(s) · tier sobe automaticamente com o atraso</div></div>`;
   html += `<div class="card">`;
   html += `<div class="utabs">`;
-  for (const b of WORK_BOARDS) html += `<button class="${trabalhoActiveBoard === b.id ? 'active' : ''}" onclick="onTrabalhoBoardTab('${b.id}')">${b.nome}</button>`;
+  for (const b of STATE.workBoards) html += `<button class="${trabalhoActiveBoard === b.id ? 'active' : ''}" onclick="onTrabalhoBoardTab('${b.id}')">${b.nome}</button>`;
   html += `</div>`;
+  html += `<div class="inline-form" style="margin-top:-6px">
+    <button class="btn ghost" style="padding:5px 10px" onclick="onAddWorkBoard()">+ Board</button>
+    <button class="btn ghost" style="padding:5px 10px" onclick="onRenameWorkBoard()">${svgIcon('edit', 12)} Renomear board</button>
+    ${STATE.workBoards.length > 1 ? `<button class="btn ghost" style="padding:5px 10px" onclick="onDeleteWorkBoard()">✕ Excluir board</button>` : ''}
+  </div>`;
   html += `<div class="view-tabs">`;
   for (const v of VIEW_TYPES) html += `<button class="${trabalhoViewType === v.id ? 'active' : ''}" onclick="onTrabalhoViewType('${v.id}')">${svgIcon(v.icon, 14)} ${v.label}</button>`;
   html += `</div>`;
@@ -1137,6 +1199,28 @@ function renderTrabalho() {
 function onTrabalhoViewType(id) { trabalhoViewType = id; renderTrabalho(); }
 function onTrabalhoCalNav(dir) { trabalhoCalMonth = addMonths(trabalhoCalMonth, dir); renderTrabalho(); }
 function onTrabalhoBoardTab(id) { trabalhoActiveBoard = id; renderTrabalho(); }
+function onAddWorkBoard() {
+  const nome = prompt('Nome do novo board:');
+  if (!nome || !nome.trim()) return;
+  trabalhoActiveBoard = addWorkBoard(nome.trim());
+  renderTrabalho();
+  renderSidebar();
+}
+function onRenameWorkBoard() {
+  const b = STATE.workBoards.find(x => x.id === trabalhoActiveBoard);
+  if (!b) return;
+  const nome = prompt('Novo nome do board:', b.nome);
+  if (!nome || !nome.trim()) return;
+  renameWorkBoard(b.id, nome.trim());
+  renderTrabalho();
+  renderSidebar();
+}
+function onDeleteWorkBoard() {
+  if (!confirm('Excluir este board e todas as tarefas dele? Essa ação não pode ser desfeita.')) return;
+  deleteWorkBoard(trabalhoActiveBoard);
+  renderTrabalho();
+  renderSidebar();
+}
 function workHandlers() {
   return {
     moveAttr: (id, dir) => `onMoveWork('${id}',${dir})`,
@@ -1561,30 +1645,33 @@ function onCreateCustomTabUI() {
 }
 
 /* ---------------- rendering: PESSOAL ---------------- */
-const PESSOAL_SUBTABS = [
-  { id: 'diario', label: 'Diário' },
-  { id: 'financas', label: 'Finanças' },
-  { id: 'objetivos', label: 'Objetivos' },
-  { id: 'wishlist', label: 'Wish List' },
-  { id: 'residencial', label: 'Residencial' },
-  { id: 'veiculos', label: 'Veículos' },
-];
 function renderPessoal() {
+  const tabs = allPessoalTabs();
+  if (!tabs.find(t => t.id === pessoalSub)) pessoalSub = 'diario';
+  const activeTab = tabs.find(t => t.id === pessoalSub);
+
   let html = `<div class="content-header"><h1>${navLabel('pessoal')}</h1><div class="sub">rotina, finanças, objetivos e casa</div></div>`;
   html += `<div class="utabs">`;
-  for (const s of PESSOAL_SUBTABS) html += `<button class="${pessoalSub === s.id ? 'active' : ''}" onclick="onPessoalSub('${s.id}')">${s.label}</button>`;
+  for (const s of tabs) html += `<button class="${pessoalSub === s.id ? 'active' : ''}" onclick="onPessoalSub('${s.id}')">${s.label}</button>`;
   html += `</div>`;
+  html += `<div class="inline-form" style="margin-top:-6px">
+    <button class="btn ghost" style="padding:5px 10px" onclick="onAddPessoalCategory()">+ Categoria</button>
+    ${!activeTab.builtin ? `
+      <button class="btn ghost" style="padding:5px 10px" onclick="onRenamePessoalCategory()">${svgIcon('edit', 12)} Renomear categoria</button>
+      <button class="btn ghost" style="padding:5px 10px" onclick="onDeletePessoalCategory()">✕ Excluir categoria</button>
+    ` : ''}
+  </div>`;
 
   if (pessoalSub === 'diario') {
     html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">`;
-    for (const s of PERSONAL_SIMPLE) html += simpleListPanel(s.label, s.key);
+    for (const key of PERSONAL_SIMPLE_KEYS) html += simpleListPanel(key);
     html += `</div>`;
   } else if (pessoalSub === 'financas') {
-    html += valueListPanel('Finanças · Contas a Pagar', 'financas', { withValor: true, withData: true });
+    html += valueListPanel(STATE.pessoalLabels.financas + ' · Contas a Pagar', 'financas', { withValor: true, withData: true });
   } else if (pessoalSub === 'objetivos') {
-    html += valueListPanel('Objetivos e Metas', 'objetivos', { withValor: false, withData: true });
+    html += valueListPanel(STATE.pessoalLabels.objetivos, 'objetivos', { withValor: false, withData: true });
   } else if (pessoalSub === 'wishlist') {
-    html += valueListPanel('Wish List', 'wishlist', { withValor: true, withData: false });
+    html += valueListPanel(STATE.pessoalLabels.wishlist, 'wishlist', { withValor: true, withData: false });
   } else if (pessoalSub === 'residencial') {
     html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">`;
     html += valueListPanel('Limpeza da Casa', 'residencial.limpeza', { withValor: false, withData: false });
@@ -1592,15 +1679,50 @@ function renderPessoal() {
     html += valueListPanel('Cuidados com os Gatos', 'residencial.gatos', { withValor: false, withData: true });
     html += `</div>`;
   } else if (pessoalSub === 'veiculos') {
-    html += valueListPanel('Veículos', 'veiculos', { withValor: false, withData: true });
+    html += valueListPanel(STATE.pessoalLabels.veiculos, 'veiculos', { withValor: false, withData: true });
+  } else if (pessoalSub.startsWith('custom.')) {
+    html += valueListPanel(activeTab.label, pessoalSub, { withValor: false, withData: false });
   }
   document.getElementById('view-pessoal').innerHTML = html;
 }
 function onPessoalSub(id) { pessoalSub = id; activeTreeId = null; renderPessoal(); renderSidebar(); }
+function onAddPessoalCategory() {
+  const label = prompt('Nome da nova categoria:');
+  if (!label || !label.trim()) return;
+  pessoalSub = 'custom.' + addPessoalCategory(label.trim());
+  renderPessoal();
+  renderSidebar();
+}
+function onRenamePessoalCategory() {
+  const tabs = allPessoalTabs();
+  const tab = tabs.find(t => t.id === pessoalSub);
+  if (!tab || tab.builtin) return;
+  const label = prompt('Novo nome da categoria:', tab.label);
+  if (!label || !label.trim()) return;
+  renamePessoalCategory(pessoalSub.replace('custom.', ''), label.trim(), false);
+  renderPessoal();
+  renderSidebar();
+}
+function onDeletePessoalCategory() {
+  if (!pessoalSub.startsWith('custom.')) return;
+  if (!confirm('Excluir esta categoria e todos os itens dela? Essa ação não pode ser desfeita.')) return;
+  deletePessoalCategory(pessoalSub.replace('custom.', ''));
+  pessoalSub = 'diario';
+  renderPessoal();
+  renderSidebar();
+}
+function onRenameSimplePanel(key) {
+  const label = prompt('Novo nome:', simpleLabel(key));
+  if (!label || !label.trim()) return;
+  renameSimpleLabel(key, label.trim());
+  renderPessoal();
+}
 
-function simpleListPanel(label, key) {
+function simpleListPanel(key) {
   const list = STATE.personal[key];
-  let html = `<div class="card"><div class="card-title">${label}</div>`;
+  let html = `<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:6px">${simpleLabel(key)}
+    <button class="nav-manage-btn" style="width:18px;height:18px" onclick="onRenameSimplePanel('${key}')" title="Renomear">${svgIcon('edit', 11)}</button>
+  </div>`;
   html += `<div class="inline-form"><input type="text" id="new-${key}" placeholder="Adicionar item..."><button class="btn" onclick="onAddSimple('${key}')">+</button></div>`;
   html += `<div class="row-list">`;
   if (!list.length) html += `<div class="empty-note">nada por aqui ainda</div>`;
