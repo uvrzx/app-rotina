@@ -12,6 +12,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ROTINA">
+<script>
+(function () {
+  try {
+    var saved = localStorage.getItem('rotina2026_theme');
+    var theme = (saved === 'light' || saved === 'dark') ? saved
+      : ((window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (e) { /* storage unavailable — default light styles apply */ }
+})();
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

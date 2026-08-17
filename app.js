@@ -325,6 +325,8 @@ const ICONS = {
   share: '<circle cx="6" cy="12" r="2.3"/><circle cx="17.5" cy="5.5" r="2.3"/><circle cx="17.5" cy="18.5" r="2.3"/><path d="m8 10.8 7.6-4.3M8 13.2l7.6 4.3"/>',
   asterisk: '<path d="M12 3v18M4.5 7.5l15 9M19.5 7.5l-15 9"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
+  moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>',
 };
 function svgIcon(name, size) {
   size = size || 18;
@@ -482,6 +484,13 @@ function statusItem(icon, label, count, targetView, warn) {
     <span class="count-badge ${warn && count > 0 ? 'warn' : ''}">${count}</span>
   </button>`;
 }
+function folderCard(view, icon, label, count) {
+  return `<button class="folder-card" onclick="onNav('${view}')">
+    <span class="fc-icon">${svgIcon(icon, 17)}</span>
+    <span class="fc-label">${label}</span>
+    <span class="fc-count">${count}</span>
+  </button>`;
+}
 function renderSidebar() {
   const body = document.getElementById('side-panel-body');
   body.innerHTML = `
@@ -556,12 +565,15 @@ function renderHoje() {
   const conflicts = games.map(g => ({ g, block: gameConflict(g) })).filter(x => x.block);
   const doneBlocks = blocks.filter(b => isBlockDone(dateISO, b.id)).length;
   const pct = blocks.length ? Math.round((doneBlocks / blocks.length) * 100) : 0;
+  const workToday0 = STATE.workTasks.filter(t => t.prazo === dateISO && t.status !== 'concluido');
+  const personalToday0 = allPersonalWithOrigin().filter(x => x.item.data === dateISO && x.item.status !== 'concluido');
 
   let html = `<div class="content-header">
-    <h1>Hoje</h1>
-    <div class="sub">${WEEKDAY_NAMES[weekdayOf(dateISO)]}, ${dateISO}</div>
+    <h1>Home</h1>
+    <div class="sub">${WEEKDAY_NAMES[weekdayOf(dateISO)]}, ${dateISO} · tudo que importa hoje, num só lugar</div>
   </div>`;
 
+  html += `<div class="card-grid">`;
   html += `<div class="card">
     <div class="card-title">Progresso do Dia</div>
     <div class="card-sub">blocos da rotina concluídos</div>
@@ -572,6 +584,35 @@ function renderHoje() {
     <button class="see-more" onclick="onNav('rotina')">Ver rotina completa ${svgIcon('arrowRight', 13)}</button>
   </div>`;
 
+  html += `<div class="card">
+    <div class="card-title">Jogos de Hoje</div>
+    <div class="card-sub">${games.length ? games.length + ' jogo(s)' : 'nenhum jogo hoje'}</div>`;
+  if (!games.length) {
+    html += `<div class="empty-note">sem jogos dos times acompanhados hoje.</div>`;
+  } else {
+    for (const g of games) {
+      const hasConflict = gameConflict(g);
+      html += `<div class="mini-row">
+        <span class="mr-time">${g.hora || 'TBD'}</span>
+        <span class="mr-text">🏟 ${g.teamNome} x ${g.adversario}</span>
+        ${hasConflict ? '<span class="pill warn">⚠</span>' : ''}
+      </div>`;
+    }
+  }
+  html += `<button class="see-more" onclick="onNav('jogos')">Ver todos os jogos ${svgIcon('arrowRight', 13)}</button></div>`;
+
+  html += `<div class="card">
+    <div class="card-title">Prazos de Hoje</div>
+    <div class="card-sub">${workToday0.length + personalToday0.length ? (workToday0.length + personalToday0.length) + ' pendente(s)' : 'nada vencendo hoje'}</div>`;
+  if (!workToday0.length && !personalToday0.length) {
+    html += `<div class="empty-note">nenhuma tarefa ou conta vence hoje.</div>`;
+  } else {
+    for (const t of workToday0) html += `<div class="mini-row"><span class="mr-text">💼 ${t.titulo}</span><span class="pill ${t.tier}">${t.tier}</span></div>`;
+    for (const p of personalToday0) html += `<div class="mini-row"><span class="mr-text">🏠 ${p.item.texto}</span><span class="pill origin">${p.origin}</span></div>`;
+  }
+  html += `<button class="see-more" onclick="onNav('trabalho')">Ver Trabalho ${svgIcon('arrowRight', 13)}</button></div>`;
+  html += `</div>`;
+
   if (conflicts.length) {
     html += `<div class="card"><div class="card-title">Alertas de Conflito</div>`;
     for (const c of conflicts) {
@@ -579,6 +620,13 @@ function renderHoje() {
     }
     html += `</div>`;
   }
+
+  html += `<div class="folder-row">
+    ${folderCard('trabalho', 'briefcase', 'Trabalho', countTrabalhoOpen())}
+    ${folderCard('pessoal', 'heart', 'Pessoal', countPessoalOpen())}
+    ${folderCard('jogos', 'trophy', 'Jogos', gamesOnDate(dateISO).length)}
+    ${folderCard('quadro', 'layers', 'Quadro Conjunto', countQuadroOpen())}
+  </div>`;
 
   const rows = [];
   for (const b of blocks) rows.push({ sortKey: timeToMin(b.hora_inicio), kind: 'block', data: b });
@@ -1004,13 +1052,36 @@ function closeMobileSidebar() {
   document.getElementById('sidebar-backdrop').classList.add('hidden');
 }
 
+/* ---------------- theme ---------------- */
+const THEME_KEY = 'rotina2026_theme';
+function getInitialTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch (e) { /* storage unavailable */ }
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* storage unavailable */ }
+}
+function onThemeChange(theme) { applyTheme(theme); openSettings(); }
+
 /* ---------------- settings modal ---------------- */
 function openSettings() {
   const modal = document.getElementById('settings-modal');
   const body = document.getElementById('settings-body');
   const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const notifPerm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  const theme = document.documentElement.getAttribute('data-theme') || 'light';
   body.innerHTML = `
+    <div class="settings-row">
+      <div><div class="sr-label">Tema</div><div class="sr-sub">aparência do app</div></div>
+      <div class="theme-switch">
+        <button class="${theme === 'light' ? 'active' : ''}" onclick="onThemeChange('light')">${svgIcon('sun', 14)} Claro</button>
+        <button class="${theme === 'dark' ? 'active' : ''}" onclick="onThemeChange('dark')">${svgIcon('moon', 14)} Escuro</button>
+      </div>
+    </div>
     <div class="settings-row">
       <div><div class="sr-label">Notificações locais</div><div class="sr-sub">início de bloco, prazos e jogos próximos</div></div>
       ${notifPerm === 'granted' ? `<span class="pill origin">ativas</span>` : `<button class="btn" onclick="requestNotifPermission()">Ativar</button>`}
