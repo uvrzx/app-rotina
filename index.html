@@ -33,15 +33,7 @@
   <aside class="icon-rail" id="icon-rail">
     <div class="rail-logo"></div>
     <div class="rail-divider"></div>
-    <nav class="rail-nav" id="rail-nav">
-      <button class="rail-btn" data-view="hoje" title="Hoje"></button>
-      <button class="rail-btn" data-view="rotina" title="Rotina"></button>
-      <button class="rail-btn" data-view="trabalho" title="Trabalho"></button>
-      <button class="rail-btn" data-view="pessoal" title="Pessoal"></button>
-      <button class="rail-btn" data-view="fitness" title="Fitness"></button>
-      <button class="rail-btn" data-view="jogos" title="Jogos"></button>
-      <button class="rail-btn" data-view="quadro" title="Quadro Conjunto"></button>
-    </nav>
+    <nav class="rail-nav" id="rail-nav"></nav>
     <span class="rail-brand-vertical">ROTINA 2026</span>
     <button class="rail-gear" id="btn-settings" title="Configurações"></button>
   </aside>
@@ -58,6 +50,7 @@
     <section id="view-fitness" class="view hidden"></section>
     <section id="view-jogos" class="view hidden"></section>
     <section id="view-quadro" class="view hidden"></section>
+    <section id="view-custom" class="view hidden"></section>
     <div class="foot-note">rotina 2026 · dados salvos apenas neste dispositivo (localStorage)</div>
   </main>
 
@@ -67,6 +60,15 @@
       <h3>Configurações</h3>
       <div class="modal-sub">notificações, instalação e preferências</div>
       <div id="settings-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="manage-tabs-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="manage-tabs-close">✕</button>
+      <h3>Gerenciar Abas</h3>
+      <div class="modal-sub">renomeie, reordene, esconda ou crie abas novas</div>
+      <div id="manage-tabs-body"></div>
     </div>
   </div>
 </div>

@@ -333,9 +333,24 @@ function defaultState() {
       workouts: [],
       medidas: [],
     },
+    navConfig: [
+      { id: 'hoje', label: 'Hoje', icon: 'home', visible: true, order: 0 },
+      { id: 'rotina', label: 'Rotina', icon: 'calendar', visible: true, order: 1 },
+      { id: 'trabalho', label: 'Trabalho', icon: 'briefcase', visible: true, order: 2 },
+      { id: 'pessoal', label: 'Pessoal', icon: 'heart', visible: true, order: 3 },
+      { id: 'fitness', label: 'Fitness', icon: 'dumbbell', visible: true, order: 4 },
+      { id: 'jogos', label: 'Jogos', icon: 'trophy', visible: true, order: 5 },
+      { id: 'quadro', label: 'Quadro Conjunto', icon: 'layers', visible: true, order: 6 },
+    ],
+    customTabs: {},
     notif: { leadMinutes: 15, notifiedGames: {}, notifiedTasks: {}, notifiedBlocks: {} },
     installDismissed: false,
   };
+}
+function mergeNavConfig(defConfig, savedConfig) {
+  if (!Array.isArray(savedConfig)) return defConfig;
+  const savedById = Object.fromEntries(savedConfig.map(c => [c.id, c]));
+  return defConfig.map(d => (savedById[d.id] ? { ...d, ...savedById[d.id] } : d)).sort((a, b) => a.order - b.order);
 }
 let STATE = loadState();
 function loadState() {
@@ -349,6 +364,8 @@ function loadState() {
       notif: { ...def.notif, ...(parsed.notif || {}) },
       personal: { ...def.personal, ...(parsed.personal || {}) },
       fitness: { ...def.fitness, ...(parsed.fitness || {}) },
+      navConfig: mergeNavConfig(def.navConfig, parsed.navConfig),
+      customTabs: { ...def.customTabs, ...(parsed.customTabs || {}) },
     };
   } catch (e) {
     return defaultState();
@@ -600,6 +617,9 @@ const ICONS = {
   kanbanView: '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/>',
   tableView: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9.5 4v16"/>',
   ganttView: '<path d="M4 6h8M4 12h13M4 18h6"/><circle cx="14" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.6" fill="currentColor" stroke="none"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M3 3l18 18"/><path d="M10.6 5.6A10.6 10.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17.7 17.7 0 0 1-3.2 4.1M6.5 6.9C4 8.6 2.5 12 2.5 12s3.5 6.5 9.5 6.5a9.6 9.6 0 0 0 3.3-.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
 };
 function svgIcon(name, size) {
   size = size || 18;
@@ -742,13 +762,39 @@ function onTreeLeaf(id) {
 function onTreeSearch(v) { treeSearch = v; renderTreeInto(); }
 
 /* ---------------- sidebar ---------------- */
-function navItem(view, icon, label, count) {
-  const active = currentView === view && !activeTreeId;
-  return `<button class="nav-item ${active ? 'active' : ''}" onclick="onNav('${view}')">
-    <span class="ni-icon">${svgIcon(icon, 16)}</span>
-    <span class="ni-label">${label}</span>
-    <span class="count-badge">${count}</span>
+const BUILTIN_BADGE_FN = {
+  hoje: countHojeBadge,
+  rotina: countHabitsPendingToday,
+  trabalho: countTrabalhoOpen,
+  pessoal: countPessoalOpen,
+  fitness: countFitnessRecent,
+  jogos: countJogosBadge,
+  quadro: countQuadroOpen,
+};
+function countCustomTabOpen(tab) { return tab.lists.reduce((s, l) => s + openCount(l.tasks), 0); }
+function navLabel(id) {
+  const c = STATE.navConfig.find(x => x.id === id);
+  return c ? c.label : id;
+}
+function allNavTabs(includeHidden) {
+  const builtins = STATE.navConfig
+    .filter(c => includeHidden || c.visible)
+    .map(c => ({ id: c.id, label: c.label, icon: c.icon, order: c.order, kind: 'builtin', count: (BUILTIN_BADGE_FN[c.id] || (() => 0))() }));
+  const customs = Object.values(STATE.customTabs)
+    .map(t => ({ id: t.id, label: t.label, icon: t.icon || 'folder', order: t.order, kind: 'custom', count: countCustomTabOpen(t) }));
+  return [...builtins, ...customs].sort((a, b) => a.order - b.order);
+}
+function navItem(tab) {
+  const active = currentView === tab.id && !activeTreeId;
+  return `<button class="nav-item ${active ? 'active' : ''}" onclick="onNav('${tab.id}')">
+    <span class="ni-icon">${svgIcon(tab.icon, 16)}</span>
+    <span class="ni-label">${tab.label}</span>
+    <span class="count-badge">${tab.count}</span>
   </button>`;
+}
+function renderRail() {
+  const nav = document.getElementById('rail-nav');
+  nav.innerHTML = allNavTabs().map(tab => `<button class="rail-btn ${currentView === tab.id ? 'active' : ''}" data-view="${tab.id}" title="${tab.label}" onclick="onNav('${tab.id}')">${svgIcon(tab.icon, 18)}</button>`).join('');
 }
 function statusItem(icon, label, count, targetView, warn) {
   return `<button class="nav-item" onclick="onNav('${targetView}')">
@@ -776,15 +822,9 @@ function renderSidebar() {
     </div>
 
     <div class="nav-section">
-      <div class="nav-section-label">Navegação</div>
+      <div class="nav-section-label">Navegação <button class="nav-manage-btn" onclick="openManageTabs()" title="Gerenciar abas">${svgIcon('gear', 13)}</button></div>
       <div class="nav-list">
-        ${navItem('hoje', 'home', 'Hoje', countHojeBadge())}
-        ${navItem('rotina', 'calendar', 'Rotina', countHabitsPendingToday())}
-        ${navItem('trabalho', 'briefcase', 'Trabalho', countTrabalhoOpen())}
-        ${navItem('pessoal', 'heart', 'Pessoal', countPessoalOpen())}
-        ${navItem('fitness', 'dumbbell', 'Fitness', countFitnessRecent())}
-        ${navItem('jogos', 'trophy', 'Jogos', countJogosBadge())}
-        ${navItem('quadro', 'layers', 'Quadro Conjunto', countQuadroOpen())}
+        ${allNavTabs().map(navItem).join('')}
       </div>
     </div>
 
@@ -818,6 +858,7 @@ function renderSidebar() {
     </div>
   `;
   renderTreeInto();
+  renderRail();
 }
 function onNav(view) {
   activeTreeId = null;
@@ -843,7 +884,7 @@ function renderHoje() {
   const personalToday0 = allPersonalWithOrigin().filter(x => x.item.data === dateISO && x.item.status !== 'concluido');
 
   let html = `<div class="content-header">
-    <h1>Home</h1>
+    <h1>${navLabel('hoje')}</h1>
     <div class="sub">${WEEKDAY_NAMES[weekdayOf(dateISO)]}, ${dateISO} · tudo que importa hoje, num só lugar</div>
   </div>`;
 
@@ -895,12 +936,12 @@ function renderHoje() {
     html += `</div>`;
   }
 
-  html += `<div class="folder-row">
-    ${folderCard('trabalho', 'briefcase', 'Trabalho', countTrabalhoOpen())}
-    ${folderCard('pessoal', 'heart', 'Pessoal', countPessoalOpen())}
-    ${folderCard('jogos', 'trophy', 'Jogos', gamesOnDate(dateISO).length)}
-    ${folderCard('quadro', 'layers', 'Quadro Conjunto', countQuadroOpen())}
-  </div>`;
+  const homeAreas = ['trabalho', 'pessoal', 'jogos', 'quadro']
+    .map(id => STATE.navConfig.find(c => c.id === id))
+    .filter(c => c && c.visible)
+    .map(c => folderCard(c.id, c.icon, c.label, c.id === 'jogos' ? gamesOnDate(dateISO).length : (BUILTIN_BADGE_FN[c.id] ? BUILTIN_BADGE_FN[c.id]() : 0)))
+    .join('');
+  if (homeAreas) html += `<div class="folder-row">${homeAreas}</div>`;
 
   const rows = [];
   for (const b of blocks) rows.push({ sortKey: timeToMin(b.hora_inicio), kind: 'block', data: b });
@@ -980,7 +1021,7 @@ function onQuickHabit(habitId) {
 
 /* ---------------- rendering: ROTINA ---------------- */
 function renderRotina() {
-  let html = `<div class="content-header"><h1>Rotina</h1><div class="sub">grade semanal fixa e hábitos</div></div>`;
+  let html = `<div class="content-header"><h1>${navLabel('rotina')}</h1><div class="sub">grade semanal fixa e hábitos</div></div>`;
   html += `<div class="card"><div class="card-title">Grade Semanal</div><div class="card-sub">blocos fixos por dia</div>`;
   html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">`;
   for (let d = 0; d < 7; d++) {
@@ -1068,7 +1109,7 @@ let trabalhoCalMonth = todayISO().slice(0, 7);
 
 function renderTrabalho() {
   refreshTiers();
-  let html = `<div class="content-header"><h1>Trabalho</h1><div class="sub">3 boards · tier sobe automaticamente com o atraso</div></div>`;
+  let html = `<div class="content-header"><h1>${navLabel('trabalho')}</h1><div class="sub">3 boards · tier sobe automaticamente com o atraso</div></div>`;
   html += `<div class="card">`;
   html += `<div class="utabs">`;
   for (const b of WORK_BOARDS) html += `<button class="${trabalhoActiveBoard === b.id ? 'active' : ''}" onclick="onTrabalhoBoardTab('${b.id}')">${b.nome}</button>`;
@@ -1083,31 +1124,59 @@ function renderTrabalho() {
   </div>`;
 
   const tasks = STATE.workTasks.filter(t => t.board === trabalhoActiveBoard);
-  if (trabalhoViewType === 'quadro') html += renderTrabalhoBoard(tasks);
-  else if (trabalhoViewType === 'lista') html += renderTrabalhoList(tasks);
-  else if (trabalhoViewType === 'calendario') html += renderTrabalhoCalendar(tasks);
-  else if (trabalhoViewType === 'gantt') html += renderTrabalhoGantt(tasks);
-  else if (trabalhoViewType === 'tabela') html += renderTrabalhoTable(tasks);
+  const h = workHandlers();
+  if (trabalhoViewType === 'quadro') html += genericBoard(tasks, h);
+  else if (trabalhoViewType === 'lista') html += genericList(tasks, h);
+  else if (trabalhoViewType === 'calendario') html += genericCalendar(tasks, trabalhoCalMonth, (dir) => `onTrabalhoCalNav(${dir})`);
+  else if (trabalhoViewType === 'gantt') html += genericGantt(tasks);
+  else if (trabalhoViewType === 'tabela') html += genericTable(tasks, h);
 
   html += `</div>`;
   document.getElementById('view-trabalho').innerHTML = html;
 }
 function onTrabalhoViewType(id) { trabalhoViewType = id; renderTrabalho(); }
+function onTrabalhoCalNav(dir) { trabalhoCalMonth = addMonths(trabalhoCalMonth, dir); renderTrabalho(); }
+function onTrabalhoBoardTab(id) { trabalhoActiveBoard = id; renderTrabalho(); }
+function workHandlers() {
+  return {
+    moveAttr: (id, dir) => `onMoveWork('${id}',${dir})`,
+    delAttr: (id) => `onDeleteWork('${id}')`,
+    shareAttr: (id) => `onToggleWorkShared('${id}')`,
+  };
+}
 
-function renderTrabalhoBoard(tasks) {
+/* ---------------- generic task views (shared by Trabalho + custom tabs) ---------------- */
+function genericTaskCard(t, h) {
+  const overdue = daysOverdue(t.prazo) > 0 && t.status !== 'concluido';
+  return `<div class="task-card tier-${t.tier}">
+    <div class="t-title">${t.titulo}</div>
+    <div class="t-meta">
+      <span class="t-deadline">${t.prazo ? 'prazo ' + t.prazo + (overdue ? ' · atrasado' : '') : 'sem prazo'}</span>
+      <span class="pill ${t.tier}">${t.tier}</span>
+    </div>
+    <div class="t-share-row">
+      <input type="checkbox" ${t.compartilhada ? 'checked' : ''} onchange="${h.shareAttr(t.id)}"> compartilhada
+    </div>
+    <div class="t-actions">
+      <button onclick="${h.moveAttr(t.id, -1)}" ${t.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
+      <button onclick="${h.moveAttr(t.id, 1)}" ${t.status === 'concluido' ? 'disabled' : ''}>▶</button>
+      <button onclick="${h.delAttr(t.id)}">✕</button>
+    </div>
+  </div>`;
+}
+function genericBoard(tasks, h) {
   let html = `<div class="kanban">`;
   for (const col of STATUS_COLS) {
     html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
     const colTasks = tasks.filter(t => t.status === col.id);
     if (!colTasks.length) html += `<div class="empty-note">vazio</div>`;
-    for (const t of colTasks) html += renderWorkTaskCard(t);
+    for (const t of colTasks) html += genericTaskCard(t, h);
     html += `</div></div>`;
   }
   html += `</div>`;
   return html;
 }
-
-function renderTrabalhoList(tasks) {
+function genericList(tasks, h) {
   let html = '';
   for (const col of STATUS_COLS) {
     const colTasks = tasks.filter(t => t.status === col.id);
@@ -1120,9 +1189,9 @@ function renderTrabalhoList(tasks) {
         <span class="r-meta">${t.prazo || 'sem prazo'}</span>
         <span class="pill ${t.tier}">${t.tier}</span>
         <div class="t-actions">
-          <button onclick="onMoveWork('${t.id}',-1)" ${t.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
-          <button onclick="onMoveWork('${t.id}',1)" ${t.status === 'concluido' ? 'disabled' : ''}>▶</button>
-          <button onclick="onDeleteWork('${t.id}')">✕</button>
+          <button onclick="${h.moveAttr(t.id, -1)}" ${t.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
+          <button onclick="${h.moveAttr(t.id, 1)}" ${t.status === 'concluido' ? 'disabled' : ''}>▶</button>
+          <button onclick="${h.delAttr(t.id)}">✕</button>
         </div>
       </div>`;
     }
@@ -1130,8 +1199,7 @@ function renderTrabalhoList(tasks) {
   }
   return html;
 }
-
-function renderTrabalhoTable(tasks) {
+function genericTable(tasks, h) {
   let html = `<div style="overflow-x:auto"><table class="flat-table"><thead><tr>
     <th>Nome</th><th>Status</th><th>Prazo</th><th>Tier</th><th>Compartilhada</th><th></th>
   </tr></thead><tbody>`;
@@ -1144,22 +1212,21 @@ function renderTrabalhoTable(tasks) {
       <td>${t.prazo || '—'}</td>
       <td><span class="pill ${t.tier}">${t.tier}</span></td>
       <td>${t.compartilhada ? 'sim' : 'não'}</td>
-      <td><button class="btn ghost" style="padding:3px 8px" onclick="onDeleteWork('${t.id}')">✕</button></td>
+      <td><button class="btn ghost" style="padding:3px 8px" onclick="${h.delAttr(t.id)}">✕</button></td>
     </tr>`;
   }
   html += `</tbody></table></div>`;
   return html;
 }
-
-function renderTrabalhoCalendar(tasks) {
+function genericCalendar(tasks, calMonth, navAttr) {
   const byDate = {};
   for (const t of tasks) { if (t.prazo) (byDate[t.prazo] = byDate[t.prazo] || []).push(t); }
-  const [y, m] = trabalhoCalMonth.split('-').map(Number);
-  const days = monthGridDays(trabalhoCalMonth);
+  const [y, m] = calMonth.split('-').map(Number);
+  const days = monthGridDays(calMonth);
   let html = `<div class="cal-header">
-    <button class="btn ghost" onclick="onTrabalhoCalNav(-1)">‹</button>
+    <button class="btn ghost" onclick="${navAttr(-1)}">‹</button>
     <div class="cal-title">${MONTH_NAMES[m - 1]} ${y}</div>
-    <button class="btn ghost" onclick="onTrabalhoCalNav(1)">›</button>
+    <button class="btn ghost" onclick="${navAttr(1)}">›</button>
   </div>`;
   html += `<div class="cal-grid">`;
   for (const wd of WEEKDAY_SHORT) html += `<div class="cal-dow">${wd}</div>`;
@@ -1178,9 +1245,7 @@ function renderTrabalhoCalendar(tasks) {
   html += `</div>`;
   return html;
 }
-function onTrabalhoCalNav(dir) { trabalhoCalMonth = addMonths(trabalhoCalMonth, dir); renderTrabalho(); }
-
-function renderTrabalhoGantt(tasks) {
+function genericGantt(tasks) {
   const withDates = tasks.filter(t => t.prazo).sort((a, b) => a.prazo.localeCompare(b.prazo));
   if (!withDates.length) return `<div class="empty-note">nenhuma tarefa com prazo para mostrar na timeline. (Gantt aqui marca a data de prazo — como as tarefas não têm data de início, não dá pra desenhar barras de duração.)</div>`;
   const totalDays = 35;
@@ -1208,25 +1273,6 @@ function renderTrabalhoGantt(tasks) {
     ${rows}
   </div>`;
 }
-function renderWorkTaskCard(t) {
-  const overdue = daysOverdue(t.prazo) > 0 && t.status !== 'concluido';
-  return `<div class="task-card tier-${t.tier}">
-    <div class="t-title">${t.titulo}</div>
-    <div class="t-meta">
-      <span class="t-deadline">${t.prazo ? 'prazo ' + t.prazo + (overdue ? ' · atrasado' : '') : 'sem prazo'}</span>
-      <span class="pill ${t.tier}">${t.tier}</span>
-    </div>
-    <div class="t-share-row">
-      <input type="checkbox" ${t.compartilhada ? 'checked' : ''} onchange="onToggleWorkShared('${t.id}')"> compartilhada
-    </div>
-    <div class="t-actions">
-      <button onclick="onMoveWork('${t.id}',-1)" ${t.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
-      <button onclick="onMoveWork('${t.id}',1)" ${t.status === 'concluido' ? 'disabled' : ''}>▶</button>
-      <button onclick="onDeleteWork('${t.id}')">✕</button>
-    </div>
-  </div>`;
-}
-function onTrabalhoBoardTab(id) { trabalhoActiveBoard = id; renderTrabalho(); }
 function onAddWorkTask() {
   const titleEl = document.getElementById('new-title-work');
   const prazoEl = document.getElementById('new-prazo-work');
@@ -1259,6 +1305,261 @@ function onToggleWorkShared(id) {
   renderSidebar();
 }
 
+/* ---------------- custom tabs (fully user-defined spaces) ---------------- */
+function nextTabOrder() {
+  const all = allNavTabs(true);
+  return all.length ? Math.max(...all.map(t => t.order)) + 1 : 0;
+}
+function createCustomTab(label) {
+  const id = 'ct' + Date.now() + Math.random().toString(36).slice(2, 6);
+  const listId = 'l' + Date.now() + Math.random().toString(36).slice(2, 6);
+  STATE.customTabs[id] = {
+    id, label, icon: 'folder', order: nextTabOrder(),
+    lists: [{ id: listId, nome: 'Lista 1', tasks: [] }],
+    activeList: listId,
+    viewType: 'quadro',
+    calMonth: todayISO().slice(0, 7),
+  };
+  saveState();
+  return id;
+}
+function deleteCustomTab(id) {
+  delete STATE.customTabs[id];
+  saveState();
+  if (currentView === id) onNav('hoje');
+}
+function renameCustomTab(id, label) {
+  if (STATE.customTabs[id]) { STATE.customTabs[id].label = label; saveState(); }
+}
+function setTabOrder(id, order) {
+  const nc = STATE.navConfig.find(c => c.id === id);
+  if (nc) { nc.order = order; return; }
+  if (STATE.customTabs[id]) STATE.customTabs[id].order = order;
+}
+function reorderTab(id, dir) {
+  const list = allNavTabs(true);
+  const idx = list.findIndex(t => t.id === id);
+  const swapIdx = idx + dir;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
+  setTabOrder(list[idx].id, list[swapIdx].order);
+  setTabOrder(list[swapIdx].id, list[idx].order);
+  saveState();
+}
+function toggleBuiltinVisible(id) {
+  const nc = STATE.navConfig.find(c => c.id === id);
+  if (nc) { nc.visible = !nc.visible; saveState(); }
+}
+function renameBuiltin(id, label) {
+  const nc = STATE.navConfig.find(c => c.id === id);
+  if (nc) { nc.label = label; saveState(); }
+}
+
+function addListToTab(tabId, nome) {
+  const tab = STATE.customTabs[tabId];
+  if (!tab) return;
+  const id = 'l' + Date.now() + Math.random().toString(36).slice(2, 6);
+  tab.lists.push({ id, nome, tasks: [] });
+  tab.activeList = id;
+  saveState();
+}
+function renameListInTab(tabId, listId, nome) {
+  const tab = STATE.customTabs[tabId];
+  const list = tab && tab.lists.find(l => l.id === listId);
+  if (list) { list.nome = nome; saveState(); }
+}
+function deleteListFromTab(tabId, listId) {
+  const tab = STATE.customTabs[tabId];
+  if (!tab) return;
+  tab.lists = tab.lists.filter(l => l.id !== listId);
+  if (!tab.lists.length) {
+    const id = 'l' + Date.now() + Math.random().toString(36).slice(2, 6);
+    tab.lists.push({ id, nome: 'Lista 1', tasks: [] });
+  }
+  if (tab.activeList === listId) tab.activeList = tab.lists[0].id;
+  saveState();
+}
+
+function customHandlers(tabId, listId) {
+  return {
+    moveAttr: (id, dir) => `onMoveCustomTask('${tabId}','${listId}','${id}',${dir})`,
+    delAttr: (id) => `onDeleteCustomTask('${tabId}','${listId}','${id}')`,
+    shareAttr: (id) => `onToggleCustomTaskShared('${tabId}','${listId}','${id}')`,
+  };
+}
+function renderCustomTab(tabId) {
+  const tab = STATE.customTabs[tabId];
+  const container = document.getElementById('view-custom');
+  if (!tab) { container.innerHTML = ''; return; }
+  if (!tab.activeList || !tab.lists.find(l => l.id === tab.activeList)) tab.activeList = tab.lists[0] ? tab.lists[0].id : null;
+
+  let html = `<div class="content-header"><h1>${tab.label}</h1><div class="sub">aba personalizada</div></div>`;
+  html += `<div class="card">`;
+  html += `<div class="utabs">`;
+  for (const l of tab.lists) html += `<button class="${tab.activeList === l.id ? 'active' : ''}" onclick="onCustomListTab('${tabId}','${l.id}')">${l.nome}</button>`;
+  html += `</div>`;
+  html += `<div class="inline-form" style="margin-top:-6px">
+    <button class="btn ghost" style="padding:5px 10px" onclick="onAddCustomList('${tabId}')">+ Lista</button>
+    <button class="btn ghost" style="padding:5px 10px" onclick="onRenameCustomList('${tabId}')">${svgIcon('edit', 12)} Renomear lista</button>
+    ${tab.lists.length > 1 ? `<button class="btn ghost" style="padding:5px 10px" onclick="onDeleteCustomList('${tabId}')">✕ Excluir lista</button>` : ''}
+  </div>`;
+
+  const list = tab.lists.find(l => l.id === tab.activeList);
+  if (!list) { container.innerHTML = html + `</div>`; return; }
+
+  html += `<div class="view-tabs">`;
+  for (const v of VIEW_TYPES) html += `<button class="${tab.viewType === v.id ? 'active' : ''}" onclick="onCustomViewType('${tabId}','${v.id}')">${svgIcon(v.icon, 14)} ${v.label}</button>`;
+  html += `</div>`;
+
+  html += `<div class="inline-form">
+    <input type="text" id="ct-new-title" placeholder="Nova tarefa...">
+    <input type="date" id="ct-new-prazo">
+    <button class="btn" onclick="onAddCustomTask('${tabId}')">+ Adicionar</button>
+  </div>`;
+
+  const tasks = list.tasks;
+  const h = customHandlers(tabId, list.id);
+  if (tab.viewType === 'quadro') html += genericBoard(tasks, h);
+  else if (tab.viewType === 'lista') html += genericList(tasks, h);
+  else if (tab.viewType === 'calendario') html += genericCalendar(tasks, tab.calMonth, (dir) => `onCustomCalNav('${tabId}',${dir})`);
+  else if (tab.viewType === 'gantt') html += genericGantt(tasks);
+  else if (tab.viewType === 'tabela') html += genericTable(tasks, h);
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+function onCustomListTab(tabId, listId) {
+  const tab = STATE.customTabs[tabId];
+  if (tab) { tab.activeList = listId; saveState(); renderCustomTab(tabId); }
+}
+function onAddCustomList(tabId) {
+  const nome = prompt('Nome da nova lista:');
+  if (!nome || !nome.trim()) return;
+  addListToTab(tabId, nome.trim());
+  renderCustomTab(tabId);
+  renderSidebar();
+}
+function onRenameCustomList(tabId) {
+  const tab = STATE.customTabs[tabId];
+  const list = tab && tab.lists.find(l => l.id === tab.activeList);
+  if (!list) return;
+  const nome = prompt('Novo nome da lista:', list.nome);
+  if (!nome || !nome.trim()) return;
+  renameListInTab(tabId, list.id, nome.trim());
+  renderCustomTab(tabId);
+}
+function onDeleteCustomList(tabId) {
+  const tab = STATE.customTabs[tabId];
+  if (!tab || !confirm('Excluir esta lista e todas as tarefas dela?')) return;
+  deleteListFromTab(tabId, tab.activeList);
+  renderCustomTab(tabId);
+  renderSidebar();
+}
+function onCustomViewType(tabId, viewId) {
+  const tab = STATE.customTabs[tabId];
+  if (tab) { tab.viewType = viewId; saveState(); renderCustomTab(tabId); }
+}
+function onCustomCalNav(tabId, dir) {
+  const tab = STATE.customTabs[tabId];
+  if (tab) { tab.calMonth = addMonths(tab.calMonth, dir); saveState(); renderCustomTab(tabId); }
+}
+function onAddCustomTask(tabId) {
+  const tab = STATE.customTabs[tabId];
+  const list = tab && tab.lists.find(l => l.id === tab.activeList);
+  if (!list) return;
+  const titleEl = document.getElementById('ct-new-title');
+  const prazoEl = document.getElementById('ct-new-prazo');
+  const titulo = titleEl.value.trim();
+  if (!titulo) return;
+  list.tasks.push({ id: 'ctk' + Date.now() + Math.random().toString(36).slice(2, 6), titulo, prazo: prazoEl.value || null, status: 'a_fazer', tier: 'normal', compartilhada: false });
+  saveState();
+  renderCustomTab(tabId);
+  renderSidebar();
+}
+function onMoveCustomTask(tabId, listId, taskId, dir) {
+  const tab = STATE.customTabs[tabId];
+  const list = tab && tab.lists.find(l => l.id === listId);
+  const t = list && list.tasks.find(x => x.id === taskId);
+  if (t) { t.status = cycleStatus(t.status, dir); saveState(); renderCustomTab(tabId); renderSidebar(); }
+}
+function onDeleteCustomTask(tabId, listId, taskId) {
+  const tab = STATE.customTabs[tabId];
+  const list = tab && tab.lists.find(l => l.id === listId);
+  if (!list) return;
+  list.tasks = list.tasks.filter(x => x.id !== taskId);
+  saveState();
+  renderCustomTab(tabId);
+  renderSidebar();
+}
+function onToggleCustomTaskShared(tabId, listId, taskId) {
+  const tab = STATE.customTabs[tabId];
+  const list = tab && tab.lists.find(l => l.id === listId);
+  const t = list && list.tasks.find(x => x.id === taskId);
+  if (t) { t.compartilhada = !t.compartilhada; saveState(); renderCustomTab(tabId); renderSidebar(); }
+}
+
+/* ---------------- manage tabs modal ---------------- */
+function openManageTabs() {
+  document.getElementById('manage-tabs-modal').classList.remove('hidden');
+  renderManageTabsBody();
+}
+function closeManageTabs() { document.getElementById('manage-tabs-modal').classList.add('hidden'); }
+function renderManageTabsBody() {
+  const body = document.getElementById('manage-tabs-body');
+  const list = allNavTabs(true);
+  let html = `<div class="row-list">`;
+  list.forEach((tab, i) => {
+    const isBuiltin = tab.kind === 'builtin';
+    const visible = isBuiltin ? STATE.navConfig.find(c => c.id === tab.id).visible : true;
+    html += `<div class="manage-row ${!visible ? 'hidden-tab' : ''}">
+      <span class="mr-icon">${svgIcon(tab.icon, 16)}</span>
+      <span class="mr-name">${tab.label}</span>
+      ${!isBuiltin ? '<span class="mr-badge">custom</span>' : ''}
+      <div class="mr-btns">
+        <button onclick="onReorderTabUI('${tab.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Mover para cima">▲</button>
+        <button onclick="onReorderTabUI('${tab.id}',1)" ${i === list.length - 1 ? 'disabled' : ''} title="Mover para baixo">▼</button>
+        <button onclick="onRenameTabUI('${tab.id}','${tab.kind}')" title="Renomear">${svgIcon('edit', 12)}</button>
+        ${isBuiltin
+        ? `<button onclick="onToggleVisibleUI('${tab.id}')" title="${visible ? 'Esconder' : 'Mostrar'}">${svgIcon(visible ? 'eye' : 'eyeOff', 13)}</button>`
+        : `<button onclick="onDeleteCustomTabUI('${tab.id}')" title="Excluir">✕</button>`}
+      </div>
+    </div>`;
+  });
+  html += `</div><div class="inline-form" style="margin-top:14px"><button class="btn" onclick="onCreateCustomTabUI()">+ Nova aba</button></div>`;
+  body.innerHTML = html;
+}
+function onReorderTabUI(id, dir) { reorderTab(id, dir); renderManageTabsBody(); renderSidebar(); switchView(currentView); }
+function onRenameTabUI(id, kind) {
+  const current = kind === 'builtin' ? STATE.navConfig.find(c => c.id === id).label : STATE.customTabs[id].label;
+  const label = prompt('Novo nome da aba:', current);
+  if (!label || !label.trim()) return;
+  if (kind === 'builtin') renameBuiltin(id, label.trim());
+  else renameCustomTab(id, label.trim());
+  renderManageTabsBody();
+  renderSidebar();
+  switchView(currentView);
+}
+function onToggleVisibleUI(id) {
+  toggleBuiltinVisible(id);
+  renderManageTabsBody();
+  renderSidebar();
+  switchView(currentView);
+}
+function onDeleteCustomTabUI(id) {
+  if (!confirm('Excluir esta aba e todo o conteúdo dela? Essa ação não pode ser desfeita.')) return;
+  deleteCustomTab(id);
+  renderManageTabsBody();
+  renderSidebar();
+  switchView(currentView);
+}
+function onCreateCustomTabUI() {
+  const label = prompt('Nome da nova aba:');
+  if (!label || !label.trim()) return;
+  const id = createCustomTab(label.trim());
+  renderSidebar();
+  closeManageTabs();
+  onNav(id);
+}
+
 /* ---------------- rendering: PESSOAL ---------------- */
 const PESSOAL_SUBTABS = [
   { id: 'diario', label: 'Diário' },
@@ -1269,7 +1570,7 @@ const PESSOAL_SUBTABS = [
   { id: 'veiculos', label: 'Veículos' },
 ];
 function renderPessoal() {
-  let html = `<div class="content-header"><h1>Pessoal</h1><div class="sub">rotina, finanças, objetivos e casa</div></div>`;
+  let html = `<div class="content-header"><h1>${navLabel('pessoal')}</h1><div class="sub">rotina, finanças, objetivos e casa</div></div>`;
   html += `<div class="utabs">`;
   for (const s of PESSOAL_SUBTABS) html += `<button class="${pessoalSub === s.id ? 'active' : ''}" onclick="onPessoalSub('${s.id}')">${s.label}</button>`;
   html += `</div>`;
@@ -1369,7 +1670,7 @@ function periodSwitch(current, onclickName) {
   return `<div class="period-switch">${PERIOD_OPTIONS.map(p => `<button class="${current === p.id ? 'active' : ''}" onclick="${onclickName}(${p.id})">${p.label}</button>`).join('')}</div>`;
 }
 function renderFitness() {
-  let html = `<div class="content-header"><h1>Fitness</h1><div class="sub">treinos e medidas corporais</div></div>`;
+  let html = `<div class="content-header"><h1>${navLabel('fitness')}</h1><div class="sub">treinos e medidas corporais</div></div>`;
   html += `<div class="utabs">
     <button class="${fitnessSub === 'treinos' ? 'active' : ''}" onclick="onFitnessSub('treinos')">Treinos</button>
     <button class="${fitnessSub === 'medidas' ? 'active' : ''}" onclick="onFitnessSub('medidas')">Medidas</button>
@@ -1487,7 +1788,7 @@ function onRemoveMedida(id) { removeMedida(id); renderFitness(); renderSidebar()
 
 /* ---------------- rendering: JOGOS ---------------- */
 function renderJogos() {
-  let html = `<div class="content-header"><h1>Jogos</h1><div class="sub">times acompanhados · fuso Cuiabá/MT (UTC-4)</div></div>`;
+  let html = `<div class="content-header"><h1>${navLabel('jogos')}</h1><div class="sub">times acompanhados · fuso Cuiabá/MT (UTC-4)</div></div>`;
   for (const [teamId, team] of Object.entries(TEAMS)) {
     html += `<div class="card"><div class="card-title">${team.nome}</div><div class="card-sub">${team.liga}</div>`;
     if (!team.fixtures.length) html += `<div class="empty-note">sem jogos confirmados no momento — recheck em breve.</div>`;
@@ -1514,9 +1815,17 @@ function renderJogos() {
 function renderQuadro() {
   const workShared = STATE.workTasks.filter(t => t.compartilhada).map(t => ({ id: t.id, texto: t.titulo, status: t.status, origin: 'Trabalho', kind: 'work' }));
   const personalShared = allPersonalWithOrigin().filter(x => x.item.compartilhada).map(x => ({ id: x.item.id, texto: x.item.texto, status: x.item.status, origin: x.origin, path: x.path, kind: 'personal' }));
-  const all = [...workShared, ...personalShared];
+  const customShared = [];
+  for (const tab of Object.values(STATE.customTabs)) {
+    for (const list of tab.lists) {
+      for (const t of list.tasks) {
+        if (t.compartilhada) customShared.push({ id: t.id, texto: t.titulo, status: t.status, origin: tab.label, path: `${tab.id}:${list.id}`, kind: 'custom' });
+      }
+    }
+  }
+  const all = [...workShared, ...personalShared, ...customShared];
 
-  let html = `<div class="content-header"><h1>Quadro Conjunto</h1><div class="sub">tarefas compartilhadas / que dependem de terceiros, de qualquer área</div></div>`;
+  let html = `<div class="content-header"><h1>${navLabel('quadro')}</h1><div class="sub">tarefas compartilhadas / que dependem de terceiros, de qualquer área</div></div>`;
   html += `<div class="card"><div class="kanban">`;
   for (const col of STATUS_COLS) {
     html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
@@ -1541,6 +1850,12 @@ function onMoveQuadro(kind, id, path, dir) {
   if (kind === 'work') {
     const t = STATE.workTasks.find(x => x.id === id);
     if (t) t.status = cycleStatus(t.status, dir);
+  } else if (kind === 'custom') {
+    const [tabId, listId] = path.split(':');
+    const tab = STATE.customTabs[tabId];
+    const list = tab && tab.lists.find(l => l.id === listId);
+    const t = list && list.tasks.find(x => x.id === id);
+    if (t) t.status = cycleStatus(t.status, dir);
   } else {
     const list = personalListRef(path);
     const item = list.find(x => x.id === id);
@@ -1553,10 +1868,14 @@ function onMoveQuadro(kind, id, path, dir) {
 
 /* ---------------- view switching ---------------- */
 function switchView(view) {
+  const isCustom = !!STATE.customTabs[view];
+  if (!TABS.includes(view) && !isCustom) view = 'hoje';
   currentView = view;
   for (const t of TABS) document.getElementById(`view-${t}`).classList.toggle('hidden', t !== view);
+  document.getElementById('view-custom').classList.toggle('hidden', !isCustom);
   document.querySelectorAll('.rail-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
-  if (view === 'hoje') renderHoje();
+  if (isCustom) renderCustomTab(view);
+  else if (view === 'hoje') renderHoje();
   else if (view === 'rotina') renderRotina();
   else if (view === 'trabalho') renderTrabalho();
   else if (view === 'pessoal') renderPessoal();
@@ -1688,15 +2007,11 @@ function init() {
   document.getElementById('mobile-toggle').innerHTML = svgIcon('menu', 18);
   document.getElementById('btn-settings').innerHTML = svgIcon('gear', 18);
 
-  const iconMap = { hoje: 'home', rotina: 'calendar', trabalho: 'briefcase', pessoal: 'heart', fitness: 'dumbbell', jogos: 'trophy', quadro: 'layers' };
-  document.querySelectorAll('.rail-btn').forEach(btn => {
-    btn.innerHTML = svgIcon(iconMap[btn.dataset.view], 18);
-    btn.addEventListener('click', () => onNav(btn.dataset.view));
-  });
-
   document.getElementById('btn-settings').addEventListener('click', openSettings);
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-modal').addEventListener('click', (e) => { if (e.target.id === 'settings-modal') closeSettings(); });
+  document.getElementById('manage-tabs-close').addEventListener('click', closeManageTabs);
+  document.getElementById('manage-tabs-modal').addEventListener('click', (e) => { if (e.target.id === 'manage-tabs-modal') closeManageTabs(); });
   document.getElementById('mobile-toggle').addEventListener('click', toggleMobileSidebar);
   document.getElementById('sidebar-backdrop').addEventListener('click', closeMobileSidebar);
 
@@ -1704,7 +2019,7 @@ function init() {
   renderSidebar();
 
   const initial = (window.location.hash || '#hoje').replace('#', '');
-  switchView(TABS.includes(initial) ? initial : 'hoje');
+  switchView(initial);
 
   setInterval(() => {
     checkNotifications();
