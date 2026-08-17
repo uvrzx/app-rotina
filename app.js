@@ -154,6 +154,10 @@ function defaultState() {
         { id: 'v1', texto: 'Troca de óleo', valor: null, data: '2026-08-15', status: 'a_fazer', compartilhada: false },
       ],
     },
+    fitness: {
+      workouts: [],
+      medidas: [],
+    },
     notif: { leadMinutes: 15, notifiedGames: {}, notifiedTasks: {}, notifiedBlocks: {} },
     installDismissed: false,
   };
@@ -165,7 +169,12 @@ function loadState() {
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
     const def = defaultState();
-    return { ...def, ...parsed, notif: { ...def.notif, ...(parsed.notif || {}) }, personal: { ...def.personal, ...(parsed.personal || {}) } };
+    return {
+      ...def, ...parsed,
+      notif: { ...def.notif, ...(parsed.notif || {}) },
+      personal: { ...def.personal, ...(parsed.personal || {}) },
+      fitness: { ...def.fitness, ...(parsed.fitness || {}) },
+    };
   } catch (e) {
     return defaultState();
   }
@@ -303,6 +312,90 @@ function allPersonalWithOrigin() {
   return out;
 }
 
+/* ---------------- fitness ---------------- */
+function addWorkout(exercicio, series, reps, carga, data) {
+  STATE.fitness.workouts.push({ id: 'wo' + Date.now() + Math.random().toString(36).slice(2, 6), exercicio, series, reps, carga, data });
+  saveState();
+}
+function removeWorkout(id) {
+  const idx = STATE.fitness.workouts.findIndex(w => w.id === id);
+  if (idx >= 0) STATE.fitness.workouts.splice(idx, 1);
+  saveState();
+}
+function addMedida(fields, data) {
+  STATE.fitness.medidas.push({ id: 'me' + Date.now() + Math.random().toString(36).slice(2, 6), ...fields, data });
+  saveState();
+}
+function removeMedida(id) {
+  const idx = STATE.fitness.medidas.findIndex(m => m.id === id);
+  if (idx >= 0) STATE.fitness.medidas.splice(idx, 1);
+  saveState();
+}
+function distinctExercises() {
+  const names = [...new Set(STATE.fitness.workouts.map(w => w.exercicio))];
+  return names.sort((a, b) => a.localeCompare(b));
+}
+function withinPeriod(dateISO, days) {
+  if (!days) return true;
+  const [y, m, d] = dateISO.split('-').map(Number);
+  const entryDate = new Date(y, m - 1, d);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  cutoff.setHours(0, 0, 0, 0);
+  return entryDate >= cutoff;
+}
+function exerciseProgress(name, days) {
+  const byDate = {};
+  for (const w of STATE.fitness.workouts) {
+    if (w.exercicio !== name || !withinPeriod(w.data, days)) continue;
+    if (!byDate[w.data] || w.carga > byDate[w.data]) byDate[w.data] = w.carga;
+  }
+  return Object.entries(byDate).sort((a, b) => a[0].localeCompare(b[0])).map(([data, carga]) => ({ x: data, y: carga }));
+}
+function weightProgress(days) {
+  return STATE.fitness.medidas
+    .filter(m => m.peso != null && withinPeriod(m.data, days))
+    .sort((a, b) => a.data.localeCompare(b.data))
+    .map(m => ({ x: m.data, y: m.peso }));
+}
+function countFitnessRecent() {
+  return STATE.fitness.workouts.filter(w => withinPeriod(w.data, 7)).length + STATE.fitness.medidas.filter(m => withinPeriod(m.data, 7)).length;
+}
+function svgLineChart(points, opts) {
+  opts = opts || {};
+  const w = 560, h = 160;
+  const padL = 34, padR = 12, padT = 14, padB = 24;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  if (!points.length) {
+    return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}"><text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="var(--text-faint)" font-size="12">sem dados no período</text></svg>`;
+  }
+  const ys = points.map(p => p.y);
+  let minY = Math.min(...ys), maxY = Math.max(...ys);
+  if (minY === maxY) { minY -= 1; maxY += 1; }
+  const pad = (maxY - minY) * 0.15;
+  minY -= pad; maxY += pad;
+  const xStep = points.length > 1 ? plotW / (points.length - 1) : 0;
+  const xAt = i => padL + xStep * i;
+  const yAt = v => padT + plotH - ((v - minY) / (maxY - minY)) * plotH;
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(p.y).toFixed(1)}`).join(' ');
+  const areaD = `${pathD} L ${xAt(points.length - 1).toFixed(1)} ${(padT + plotH).toFixed(1)} L ${xAt(0).toFixed(1)} ${(padT + plotH).toFixed(1)} Z`;
+  const gridLines = [0, 1, 2, 3].map(i => {
+    const y = padT + (plotH / 3) * i;
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w - padR}" y2="${y.toFixed(1)}" stroke="var(--border-soft)" stroke-width="1"/>`;
+  }).join('');
+  const dots = points.map((p, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.y).toFixed(1)}" r="${i === points.length - 1 ? 3.5 : 2.2}" fill="var(--mint-text)"/>`).join('');
+  const last = points[points.length - 1];
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="overflow:visible">
+    ${gridLines}
+    <path d="${areaD}" fill="var(--mint-bg)" opacity="0.5"/>
+    <path d="${pathD}" fill="none" stroke="var(--mint-text)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    <text x="${padL}" y="${h - 6}" font-size="10" fill="var(--text-faint)">${points[0].x}</text>
+    <text x="${w - padR}" y="${h - 6}" font-size="10" text-anchor="end" fill="var(--text-faint)">${last.x}</text>
+    <text x="${w - padR}" y="${padT + 8}" font-size="11" text-anchor="end" fill="var(--text)" font-weight="700">${last.y}${opts.unit || ''}</text>
+  </svg>`;
+}
+
 /* ---------------- icons (minimal hand-drawn line set) ---------------- */
 const ICONS = {
   home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1h4v-6h3v6h4a1 1 0 0 0 1-1v-9"/>',
@@ -327,6 +420,7 @@ const ICONS = {
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
   moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>',
+  dumbbell: '<path d="M6.5 8.5v7M4 10v3M17.5 8.5v7M20 10v3M6.5 12h11"/><rect x="2" y="10.5" width="2" height="3" rx=".6"/><rect x="20" y="10.5" width="2" height="3" rx=".6"/>',
 };
 function svgIcon(name, size) {
   size = size || 18;
@@ -381,7 +475,7 @@ function habitStreak(habitId) {
 function bestStreak() { return Math.max(0, ...HABITS.map(h => habitStreak(h.id))); }
 
 /* ---------------- navigation state ---------------- */
-const TABS = ['hoje', 'rotina', 'trabalho', 'pessoal', 'jogos', 'quadro'];
+const TABS = ['hoje', 'rotina', 'trabalho', 'pessoal', 'fitness', 'jogos', 'quadro'];
 let currentView = 'hoje';
 let activeTreeId = null;
 let pessoalSub = 'diario';
@@ -509,6 +603,7 @@ function renderSidebar() {
         ${navItem('rotina', 'calendar', 'Rotina', countHabitsPendingToday())}
         ${navItem('trabalho', 'briefcase', 'Trabalho', countTrabalhoOpen())}
         ${navItem('pessoal', 'heart', 'Pessoal', countPessoalOpen())}
+        ${navItem('fitness', 'dumbbell', 'Fitness', countFitnessRecent())}
         ${navItem('jogos', 'trophy', 'Jogos', countJogosBadge())}
         ${navItem('quadro', 'layers', 'Quadro Conjunto', countQuadroOpen())}
       </div>
@@ -958,6 +1053,131 @@ function onTogglePersonal(path, id) { togglePersonalDone(path, id); renderPessoa
 function onToggleSharedPersonal(path, id) { toggleShared(path, id); renderPessoal(); renderSidebar(); }
 function onRemovePersonal(path, id) { removePersonalItem(path, id); renderPessoal(); renderSidebar(); }
 
+/* ---------------- rendering: FITNESS ---------------- */
+let fitnessSub = 'treinos';
+let fitnessExercise = null;
+let fitnessPeriod = 90;
+const PERIOD_OPTIONS = [{ id: 7, label: '7d' }, { id: 30, label: '30d' }, { id: 90, label: '90d' }, { id: 365, label: '1a' }, { id: 0, label: 'Tudo' }];
+function periodSwitch(current, onclickName) {
+  return `<div class="period-switch">${PERIOD_OPTIONS.map(p => `<button class="${current === p.id ? 'active' : ''}" onclick="${onclickName}(${p.id})">${p.label}</button>`).join('')}</div>`;
+}
+function renderFitness() {
+  let html = `<div class="content-header"><h1>Fitness</h1><div class="sub">treinos e medidas corporais</div></div>`;
+  html += `<div class="utabs">
+    <button class="${fitnessSub === 'treinos' ? 'active' : ''}" onclick="onFitnessSub('treinos')">Treinos</button>
+    <button class="${fitnessSub === 'medidas' ? 'active' : ''}" onclick="onFitnessSub('medidas')">Medidas</button>
+  </div>`;
+
+  if (fitnessSub === 'treinos') {
+    const exercises = distinctExercises();
+    if (!fitnessExercise && exercises.length) fitnessExercise = exercises[exercises.length - 1];
+
+    html += `<div class="card">
+      <div class="card-title">Registrar treino</div>
+      <div class="inline-form">
+        <input type="text" id="wo-exercicio" placeholder="Exercício (ex: Supino)">
+        <input type="number" id="wo-series" placeholder="Séries" style="width:80px">
+        <input type="number" id="wo-reps" placeholder="Reps" style="width:80px">
+        <input type="number" id="wo-carga" placeholder="Carga (kg)" style="width:100px">
+        <input type="date" id="wo-data" value="${todayISO()}">
+        <button class="btn" onclick="onAddWorkout()">+ Adicionar</button>
+      </div>
+    </div>`;
+
+    html += `<div class="card">
+      <div class="card-title">Progresso de carga</div>`;
+    if (!exercises.length) {
+      html += `<div class="empty-note">registre um treino para ver o gráfico de evolução.</div>`;
+    } else {
+      html += `<div class="inline-form" style="margin-bottom:10px">
+        <select id="wo-exercise-select" onchange="onSelectExercise(this.value)" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
+          ${exercises.map(e => `<option value="${e}" ${e === fitnessExercise ? 'selected' : ''}>${e}</option>`).join('')}
+        </select>
+        ${periodSwitch(fitnessPeriod, 'onFitnessPeriod')}
+      </div>`;
+      html += `<div class="chart-wrap">${svgLineChart(exerciseProgress(fitnessExercise, fitnessPeriod), { unit: 'kg' })}</div>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="card"><div class="card-title">Histórico</div><div class="row-list">`;
+    const recent = [...STATE.fitness.workouts].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
+    if (!recent.length) html += `<div class="empty-note">nenhum treino registrado ainda.</div>`;
+    for (const w of recent) {
+      html += `<div class="row-item">
+        <span class="r-text"><b>${w.exercicio}</b> — ${w.series}x${w.reps} · ${w.carga}kg</span>
+        <span class="r-meta">${w.data}</span>
+        <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveWorkout('${w.id}')">✕</button>
+      </div>`;
+    }
+    html += `</div></div>`;
+  } else {
+    html += `<div class="card">
+      <div class="card-title">Registrar medidas</div>
+      <div class="inline-form">
+        <input type="number" id="me-peso" placeholder="Peso (kg)" style="width:100px">
+        <input type="number" id="me-cintura" placeholder="Cintura (cm)" style="width:110px">
+        <input type="number" id="me-peito" placeholder="Peito (cm)" style="width:100px">
+        <input type="number" id="me-braco" placeholder="Braço (cm)" style="width:100px">
+        <input type="number" id="me-coxa" placeholder="Coxa (cm)" style="width:100px">
+        <input type="date" id="me-data" value="${todayISO()}">
+        <button class="btn" onclick="onAddMedida()">+ Adicionar</button>
+      </div>
+    </div>`;
+
+    html += `<div class="card">
+      <div class="card-title">Evolução do peso</div>
+      <div class="inline-form" style="margin-bottom:10px">${periodSwitch(fitnessPeriod, 'onFitnessPeriod')}</div>
+      <div class="chart-wrap">${svgLineChart(weightProgress(fitnessPeriod), { unit: 'kg' })}</div>
+    </div>`;
+
+    html += `<div class="card"><div class="card-title">Histórico</div><div class="row-list">`;
+    const recentM = [...STATE.fitness.medidas].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
+    if (!recentM.length) html += `<div class="empty-note">nenhuma medida registrada ainda.</div>`;
+    for (const m of recentM) {
+      const parts = [];
+      if (m.peso != null) parts.push(`${m.peso}kg`);
+      if (m.cintura != null) parts.push(`cintura ${m.cintura}cm`);
+      if (m.peito != null) parts.push(`peito ${m.peito}cm`);
+      if (m.braco != null) parts.push(`braço ${m.braco}cm`);
+      if (m.coxa != null) parts.push(`coxa ${m.coxa}cm`);
+      html += `<div class="row-item">
+        <span class="r-text">${parts.join(' · ') || '—'}</span>
+        <span class="r-meta">${m.data}</span>
+        <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveMedida('${m.id}')">✕</button>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  document.getElementById('view-fitness').innerHTML = html;
+}
+function onFitnessSub(id) { fitnessSub = id; renderFitness(); }
+function onSelectExercise(name) { fitnessExercise = name; renderFitness(); }
+function onFitnessPeriod(days) { fitnessPeriod = days; renderFitness(); }
+function onAddWorkout() {
+  const exercicio = document.getElementById('wo-exercicio').value.trim();
+  const series = parseFloat(document.getElementById('wo-series').value);
+  const reps = parseFloat(document.getElementById('wo-reps').value);
+  const carga = parseFloat(document.getElementById('wo-carga').value);
+  const data = document.getElementById('wo-data').value || todayISO();
+  if (!exercicio || isNaN(carga)) return;
+  addWorkout(exercicio, isNaN(series) ? null : series, isNaN(reps) ? null : reps, carga, data);
+  fitnessExercise = exercicio;
+  renderFitness();
+  renderSidebar();
+}
+function onRemoveWorkout(id) { removeWorkout(id); renderFitness(); renderSidebar(); }
+function onAddMedida() {
+  const val = (id) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; };
+  const peso = val('me-peso'), cintura = val('me-cintura'), peito = val('me-peito'), braco = val('me-braco'), coxa = val('me-coxa');
+  const data = document.getElementById('me-data').value || todayISO();
+  if (peso == null && cintura == null && peito == null && braco == null && coxa == null) return;
+  addMedida({ peso, cintura, peito, braco, coxa }, data);
+  renderFitness();
+  renderSidebar();
+}
+function onRemoveMedida(id) { removeMedida(id); renderFitness(); renderSidebar(); }
+
 /* ---------------- rendering: JOGOS ---------------- */
 function renderJogos() {
   let html = `<div class="content-header"><h1>Jogos</h1><div class="sub">times acompanhados · fuso Cuiabá/MT (UTC-4)</div></div>`;
@@ -1033,6 +1253,7 @@ function switchView(view) {
   else if (view === 'rotina') renderRotina();
   else if (view === 'trabalho') renderTrabalho();
   else if (view === 'pessoal') renderPessoal();
+  else if (view === 'fitness') renderFitness();
   else if (view === 'jogos') renderJogos();
   else if (view === 'quadro') renderQuadro();
   window.location.hash = view;
@@ -1160,7 +1381,7 @@ function init() {
   document.getElementById('mobile-toggle').innerHTML = svgIcon('menu', 18);
   document.getElementById('btn-settings').innerHTML = svgIcon('gear', 18);
 
-  const iconMap = { hoje: 'home', rotina: 'calendar', trabalho: 'briefcase', pessoal: 'heart', jogos: 'trophy', quadro: 'layers' };
+  const iconMap = { hoje: 'home', rotina: 'calendar', trabalho: 'briefcase', pessoal: 'heart', fitness: 'dumbbell', jogos: 'trophy', quadro: 'layers' };
   document.querySelectorAll('.rail-btn').forEach(btn => {
     btn.innerHTML = svgIcon(iconMap[btn.dataset.view], 18);
     btn.addEventListener('click', () => onNav(btn.dataset.view));

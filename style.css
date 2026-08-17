@@ -721,6 +721,21 @@ svg.icon { display: block; flex-shrink: 0; }
 }
 .theme-switch button.active { background: var(--primary); color: var(--primary-text); }
 
+.period-switch { display: flex; gap: 4px; background: var(--bg-soft); border: 1px solid var(--border-soft); border-radius: var(--radius-pill); padding: 3px; }
+.period-switch button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.period-switch button.active { background: var(--primary); color: var(--primary-text); }
+
+.chart-wrap { margin: 6px 0 4px; }
+
 /* folder-style quick-access row (Home) */
 .folder-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .folder-card {
