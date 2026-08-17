@@ -27,6 +27,22 @@ function isoWeekNumber(d) {
 }
 const WEEKDAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 const WEEKDAY_SHORT = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
+const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+function addMonths(yyyyMm, delta) {
+  let [y, m] = yyyyMm.split('-').map(Number);
+  m += delta;
+  while (m > 12) { m -= 12; y++; }
+  while (m < 1) { m += 12; y--; }
+  return `${y}-${pad2(m)}`;
+}
+function monthGridDays(yyyyMm) {
+  const [y, m] = yyyyMm.split('-').map(Number);
+  const first = new Date(y, m - 1, 1);
+  const gridStart = new Date(y, m - 1, 1 - first.getDay());
+  const days = [];
+  for (let i = 0; i < 42; i++) { const d = new Date(gridStart); d.setDate(gridStart.getDate() + i); days.push(d); }
+  return days;
+}
 
 /* ---------------- routine seed (section 4.1) ---------------- */
 function weekdayBlocks() {
@@ -86,6 +102,22 @@ const BENGALS = [
   { data: '2026-08-28', hora: '20:00', adversario: 'Philadelphia Eagles', mandante: false, competicao: 'nfl-pre' },
   { data: '2026-09-13', hora: '13:00', adversario: 'Tampa Bay Buccaneers', mandante: true, competicao: 'nfl-reg' },
   { data: '2026-09-20', hora: '13:00', adversario: 'Houston Texans', mandante: false, competicao: 'nfl-reg' },
+  { data: '2026-09-27', hora: '13:00', adversario: 'Pittsburgh Steelers', mandante: false, competicao: 'nfl-reg' },
+  { data: '2026-10-04', hora: '13:00', adversario: 'Jacksonville Jaguars', mandante: true, competicao: 'nfl-reg' },
+  { data: '2026-10-11', hora: '13:00', adversario: 'Miami Dolphins', mandante: false, competicao: 'nfl-reg' },
+  // WK6: bye week — sem jogo
+  { data: '2026-10-25', hora: '13:00', adversario: 'Baltimore Ravens', mandante: false, competicao: 'nfl-reg' },
+  { data: '2026-11-01', hora: '14:00', adversario: 'Tennessee Titans', mandante: true, competicao: 'nfl-reg' },
+  { data: '2026-11-08', hora: '10:30', adversario: 'Atlanta Falcons', mandante: true, competicao: 'nfl-reg' },
+  { data: '2026-11-15', hora: '21:20', adversario: 'Pittsburgh Steelers', mandante: true, competicao: 'nfl-reg' },
+  { data: '2026-11-23', hora: '21:15', adversario: 'Washington Commanders', mandante: false, competicao: 'nfl-reg' },
+  { data: '2026-11-29', hora: '14:00', adversario: 'New Orleans Saints', mandante: true, competicao: 'nfl-reg' },
+  { data: '2026-12-06', hora: '14:00', adversario: 'Cleveland Browns', mandante: false, competicao: 'nfl-reg' },
+  { data: '2026-12-13', hora: '17:25', adversario: 'Kansas City Chiefs', mandante: true, competicao: 'nfl-reg' },
+  { data: '2026-12-20', hora: '14:00', adversario: 'Carolina Panthers', mandante: true, competicao: 'nfl-reg' },
+  // WK16: flex game vs Indianapolis Colts — data/horário ainda não definidos pela NFL
+  { data: '2026-12-31', hora: '21:15', adversario: 'Baltimore Ravens', mandante: false, competicao: 'nfl-reg' },
+  // WK18: flex game @ Cleveland Browns — data/horário ainda não definidos pela NFL
 ];
 const MAN_UTD = [
   { data: '2026-08-22', hora: '07:30', adversario: 'Hull City', mandante: false, competicao: 'epl' },
@@ -99,22 +131,165 @@ const SANTOS = [
   { data: '2026-08-04', hora: '20:30', adversario: 'Remo', mandante: false, competicao: 'copa-do-brasil' },
   { data: '2026-08-09', hora: null, adversario: 'Athletico-PR', mandante: true, competicao: 'brasileirao' },
   { data: '2026-08-16', hora: null, adversario: 'Vasco da Gama', mandante: false, competicao: 'brasileirao' },
-  { data: '2026-08-23', hora: null, adversario: 'Mirassol', mandante: true, competicao: 'brasileirao' },
-  { data: '2026-08-30', hora: null, adversario: 'Corinthians', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-08-20', hora: '17:00', adversario: 'Macará', mandante: false, competicao: 'sudamericana' },
+  { data: '2026-08-23', hora: '16:30', adversario: 'Mirassol', mandante: true, competicao: 'brasileirao' },
+  { data: '2026-08-26', hora: '19:30', adversario: 'Palmeiras', mandante: false, competicao: 'copa-do-brasil' },
+  { data: '2026-08-30', hora: '14:00', adversario: 'Corinthians', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-09-02', hora: '19:30', adversario: 'Palmeiras', mandante: true, competicao: 'copa-do-brasil' },
+  { data: '2026-09-06', hora: '14:00', adversario: 'Internacional', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-09-12', hora: null, adversario: 'Cruzeiro', mandante: true, competicao: 'brasileirao' },
+  { data: '2026-09-19', hora: null, adversario: 'Remo', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-10-07', hora: null, adversario: 'Flamengo', mandante: true, competicao: 'brasileirao' },
+  { data: '2026-10-10', hora: null, adversario: 'Atlético-MG', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-10-17', hora: null, adversario: 'Fluminense', mandante: true, competicao: 'brasileirao' },
+  { data: '2026-10-24', hora: null, adversario: 'Bahia', mandante: true, competicao: 'brasileirao' },
+  { data: '2026-10-28', hora: null, adversario: 'Palmeiras', mandante: true, competicao: 'brasileirao' },
+  { data: '2026-11-04', hora: null, adversario: 'Red Bull Bragantino', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-11-18', hora: null, adversario: 'Coritiba', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-11-21', hora: null, adversario: 'Grêmio', mandante: true, competicao: 'brasileirao' },
+  { data: '2026-11-28', hora: null, adversario: 'Vitória', mandante: false, competicao: 'brasileirao' },
+  { data: '2026-12-02', hora: null, adversario: 'Botafogo', mandante: true, competicao: 'brasileirao' },
 ];
-const LAKERS = [];
+const DODGERS = [
+  { data: '2026-08-17', hora: '20:40', adversario: 'Colorado Rockies', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-18', hora: '20:40', adversario: 'Colorado Rockies', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-19', hora: '20:40', adversario: 'Colorado Rockies', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-21', hora: '22:10', adversario: 'Pittsburgh Pirates', mandante: true, competicao: 'mlb' },
+  { data: '2026-08-22', hora: '19:15', adversario: 'Pittsburgh Pirates', mandante: true, competicao: 'mlb' },
+  { data: '2026-08-23', hora: '16:10', adversario: 'Pittsburgh Pirates', mandante: true, competicao: 'mlb' },
+  { data: '2026-08-25', hora: '19:15', adversario: 'Atlanta Braves', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-26', hora: '19:15', adversario: 'Atlanta Braves', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-27', hora: '19:15', adversario: 'Atlanta Braves', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-28', hora: '18:40', adversario: 'Detroit Tigers', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-29', hora: '13:10', adversario: 'Detroit Tigers', mandante: false, competicao: 'mlb' },
+  { data: '2026-08-30', hora: '13:40', adversario: 'Detroit Tigers', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-01', hora: '22:10', adversario: 'St. Louis Cardinals', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-02', hora: '22:10', adversario: 'St. Louis Cardinals', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-03', hora: '22:10', adversario: 'St. Louis Cardinals', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-04', hora: '22:10', adversario: 'Washington Nationals', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-05', hora: '21:10', adversario: 'Washington Nationals', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-06', hora: '22:10', adversario: 'Washington Nationals', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-07', hora: '21:10', adversario: 'Cincinnati Reds', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-08', hora: '22:10', adversario: 'Cincinnati Reds', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-09', hora: '22:10', adversario: 'Cincinnati Reds', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-11', hora: '19:10', adversario: 'Miami Marlins', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-12', hora: '16:10', adversario: 'Miami Marlins', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-13', hora: '13:40', adversario: 'Miami Marlins', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-14', hora: '18:40', adversario: 'Cincinnati Reds', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-15', hora: '18:40', adversario: 'Cincinnati Reds', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-16', hora: '18:40', adversario: 'Cincinnati Reds', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-17', hora: '12:40', adversario: 'Cincinnati Reds', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-18', hora: '22:10', adversario: 'San Francisco Giants', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-19', hora: '21:10', adversario: 'San Francisco Giants', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-20', hora: '16:10', adversario: 'San Francisco Giants', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-22', hora: '22:10', adversario: 'San Diego Padres', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-23', hora: '22:10', adversario: 'San Diego Padres', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-24', hora: '22:10', adversario: 'San Diego Padres', mandante: true, competicao: 'mlb' },
+  { data: '2026-09-25', hora: '22:15', adversario: 'San Francisco Giants', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-26', hora: '16:05', adversario: 'San Francisco Giants', mandante: false, competicao: 'mlb' },
+  { data: '2026-09-27', hora: '15:05', adversario: 'San Francisco Giants', mandante: false, competicao: 'mlb' },
+];
+const LAKERS = [
+  { data: '2026-10-05', hora: '22:00', adversario: 'Sacramento Kings', mandante: false, competicao: 'nba-pre' },
+  { data: '2026-10-06', hora: '22:00', adversario: 'Golden State Warriors', mandante: false, competicao: 'nba-pre' },
+  { data: '2026-10-08', hora: '22:30', adversario: 'Sacramento Kings', mandante: true, competicao: 'nba-pre' },
+  { data: '2026-10-13', hora: null, adversario: 'Golden State Warriors', mandante: true, competicao: 'nba-pre' },
+  { data: '2026-10-16', hora: null, adversario: 'Denver Nuggets', mandante: true, competicao: 'nba-pre' },
+  { data: '2026-10-21', hora: '22:00', adversario: 'Golden State Warriors', mandante: true, competicao: 'nba' },
+  { data: '2026-10-23', hora: '22:00', adversario: 'LA Clippers', mandante: true, competicao: 'nba' },
+  { data: '2026-10-25', hora: '17:00', adversario: 'Utah Jazz', mandante: false, competicao: 'nba' },
+  { data: '2026-10-27', hora: '23:00', adversario: 'Portland Trail Blazers', mandante: true, competicao: 'nba' },
+  { data: '2026-10-28', hora: '22:30', adversario: 'LA Clippers', mandante: false, competicao: 'nba' },
+  { data: '2026-10-30', hora: '22:00', adversario: 'Golden State Warriors', mandante: false, competicao: 'nba' },
+  { data: '2026-11-01', hora: '22:00', adversario: 'Toronto Raptors', mandante: true, competicao: 'nba' },
+  { data: '2026-11-02', hora: '23:00', adversario: 'Miami Heat', mandante: true, competicao: 'nba' },
+  { data: '2026-11-04', hora: '23:00', adversario: 'Sacramento Kings', mandante: false, competicao: 'nba' },
+  { data: '2026-11-06', hora: '23:00', adversario: 'Portland Trail Blazers', mandante: true, competicao: 'nba' },
+  { data: '2026-11-08', hora: '19:00', adversario: 'Detroit Pistons', mandante: false, competicao: 'nba' },
+  { data: '2026-11-09', hora: '20:00', adversario: 'Atlanta Hawks', mandante: false, competicao: 'nba' },
+  { data: '2026-11-11', hora: '21:00', adversario: 'Milwaukee Bucks', mandante: false, competicao: 'nba' },
+  { data: '2026-11-15', hora: '17:00', adversario: 'Phoenix Suns', mandante: false, competicao: 'nba' },
+  { data: '2026-11-17', hora: '23:00', adversario: 'Charlotte Hornets', mandante: true, competicao: 'nba' },
+  { data: '2026-11-18', hora: '23:00', adversario: 'Utah Jazz', mandante: true, competicao: 'nba' },
+  { data: '2026-11-20', hora: '23:00', adversario: 'Sacramento Kings', mandante: true, competicao: 'nba' },
+  { data: '2026-11-23', hora: '23:00', adversario: 'Utah Jazz', mandante: true, competicao: 'nba' },
+  { data: '2026-11-27', hora: '22:30', adversario: 'San Antonio Spurs', mandante: false, competicao: 'nba' },
+  { data: '2026-11-29', hora: '17:00', adversario: 'Memphis Grizzlies', mandante: false, competicao: 'nba' },
+  { data: '2026-11-30', hora: '20:30', adversario: 'Houston Rockets', mandante: false, competicao: 'nba' },
+  { data: '2026-12-02', hora: '21:00', adversario: 'New Orleans Pelicans', mandante: false, competicao: 'nba' },
+  { data: '2026-12-14', hora: '23:00', adversario: 'New Orleans Pelicans', mandante: true, competicao: 'nba' },
+  { data: '2026-12-16', hora: '22:30', adversario: 'Minnesota Timberwolves', mandante: false, competicao: 'nba' },
+  { data: '2026-12-18', hora: '21:00', adversario: 'Minnesota Timberwolves', mandante: false, competicao: 'nba' },
+  { data: '2026-12-19', hora: '22:00', adversario: 'Denver Nuggets', mandante: false, competicao: 'nba' },
+  { data: '2026-12-21', hora: '23:00', adversario: 'Indiana Pacers', mandante: true, competicao: 'nba' },
+  { data: '2026-12-23', hora: '23:00', adversario: 'Denver Nuggets', mandante: true, competicao: 'nba' },
+  { data: '2026-12-25', hora: '18:00', adversario: 'Philadelphia 76ers', mandante: true, competicao: 'nba' },
+  { data: '2026-12-27', hora: '22:00', adversario: 'Memphis Grizzlies', mandante: true, competicao: 'nba' },
+  { data: '2026-12-29', hora: '23:30', adversario: 'Houston Rockets', mandante: true, competicao: 'nba' },
+  { data: '2026-12-31', hora: '21:00', adversario: 'New Orleans Pelicans', mandante: false, competicao: 'nba' },
+  { data: '2027-01-02', hora: '21:00', adversario: 'Chicago Bulls', mandante: false, competicao: 'nba' },
+  { data: '2027-01-03', hora: '20:00', adversario: 'Toronto Raptors', mandante: false, competicao: 'nba' },
+  { data: '2027-01-05', hora: '20:00', adversario: 'Washington Wizards', mandante: false, competicao: 'nba' },
+  { data: '2027-01-07', hora: '23:00', adversario: 'Boston Celtics', mandante: true, competicao: 'nba' },
+  { data: '2027-01-08', hora: '23:00', adversario: 'Detroit Pistons', mandante: true, competicao: 'nba' },
+  { data: '2027-01-11', hora: '23:00', adversario: 'LA Clippers', mandante: false, competicao: 'nba' },
+  { data: '2027-01-13', hora: '23:00', adversario: 'Portland Trail Blazers', mandante: false, competicao: 'nba' },
+  { data: '2027-01-14', hora: '23:00', adversario: 'Orlando Magic', mandante: true, competicao: 'nba' },
+  { data: '2027-01-17', hora: '22:00', adversario: 'Milwaukee Bucks', mandante: true, competicao: 'nba' },
+  { data: '2027-01-19', hora: '23:00', adversario: 'Sacramento Kings', mandante: false, competicao: 'nba' },
+  { data: '2027-01-21', hora: '23:00', adversario: 'Golden State Warriors', mandante: false, competicao: 'nba' },
+  { data: '2027-01-22', hora: '23:00', adversario: 'Sacramento Kings', mandante: true, competicao: 'nba' },
+  { data: '2027-01-24', hora: '17:00', adversario: 'Washington Wizards', mandante: true, competicao: 'nba' },
+  { data: '2027-01-27', hora: '00:00', adversario: 'Oklahoma City Thunder', mandante: true, competicao: 'nba' },
+  { data: '2027-01-28', hora: '20:00', adversario: 'Indiana Pacers', mandante: false, competicao: 'nba' },
+  { data: '2027-01-30', hora: '21:30', adversario: 'New York Knicks', mandante: false, competicao: 'nba' },
+  { data: '2027-01-31', hora: '20:00', adversario: 'Charlotte Hornets', mandante: false, competicao: 'nba' },
+  { data: '2027-02-02', hora: '21:00', adversario: 'Boston Celtics', mandante: false, competicao: 'nba' },
+  { data: '2027-02-04', hora: '20:30', adversario: 'Brooklyn Nets', mandante: false, competicao: 'nba' },
+  { data: '2027-02-06', hora: '21:30', adversario: 'San Antonio Spurs', mandante: false, competicao: 'nba' },
+  { data: '2027-02-08', hora: '22:30', adversario: 'Phoenix Suns', mandante: false, competicao: 'nba' },
+  { data: '2027-02-10', hora: '23:00', adversario: 'LA Clippers', mandante: true, competicao: 'nba' },
+  { data: '2027-02-12', hora: '23:30', adversario: 'Denver Nuggets', mandante: true, competicao: 'nba' },
+  { data: '2027-02-16', hora: '23:00', adversario: 'Chicago Bulls', mandante: true, competicao: 'nba' },
+  { data: '2027-02-18', hora: '23:00', adversario: 'Houston Rockets', mandante: true, competicao: 'nba' },
+  { data: '2027-02-26', hora: '23:00', adversario: 'Denver Nuggets', mandante: false, competicao: 'nba' },
+  { data: '2027-02-28', hora: '16:30', adversario: 'Dallas Mavericks', mandante: false, competicao: 'nba' },
+  { data: '2027-03-02', hora: '20:00', adversario: 'Orlando Magic', mandante: false, competicao: 'nba' },
+  { data: '2027-03-04', hora: '20:00', adversario: 'Philadelphia 76ers', mandante: false, competicao: 'nba' },
+  { data: '2027-03-06', hora: '21:30', adversario: 'Oklahoma City Thunder', mandante: true, competicao: 'nba' },
+  { data: '2027-03-07', hora: '23:30', adversario: 'Brooklyn Nets', mandante: true, competicao: 'nba' },
+  { data: '2027-03-11', hora: '23:00', adversario: 'New York Knicks', mandante: true, competicao: 'nba' },
+  { data: '2027-03-12', hora: '23:00', adversario: 'Cleveland Cavaliers', mandante: true, competicao: 'nba' },
+  { data: '2027-03-14', hora: '22:00', adversario: 'Golden State Warriors', mandante: true, competicao: 'nba' },
+  { data: '2027-03-16', hora: '22:00', adversario: 'Portland Trail Blazers', mandante: false, competicao: 'nba' },
+  { data: '2027-03-17', hora: '22:00', adversario: 'Phoenix Suns', mandante: true, competicao: 'nba' },
+  { data: '2027-03-19', hora: '22:00', adversario: 'Atlanta Hawks', mandante: true, competicao: 'nba' },
+  { data: '2027-03-21', hora: '22:00', adversario: 'Dallas Mavericks', mandante: true, competicao: 'nba' },
+  { data: '2027-03-23', hora: '20:00', adversario: 'Miami Heat', mandante: false, competicao: 'nba' },
+  { data: '2027-03-25', hora: '19:00', adversario: 'Cleveland Cavaliers', mandante: false, competicao: 'nba' },
+  { data: '2027-03-28', hora: '15:00', adversario: 'Houston Rockets', mandante: false, competicao: 'nba' },
+  { data: '2027-03-30', hora: '20:00', adversario: 'Memphis Grizzlies', mandante: false, competicao: 'nba' },
+  { data: '2027-04-01', hora: '21:30', adversario: 'Oklahoma City Thunder', mandante: false, competicao: 'nba' },
+  { data: '2027-04-04', hora: '22:00', adversario: 'San Antonio Spurs', mandante: true, competicao: 'nba' },
+  { data: '2027-04-06', hora: '22:00', adversario: 'Dallas Mavericks', mandante: true, competicao: 'nba' },
+  { data: '2027-04-07', hora: '22:00', adversario: 'Minnesota Timberwolves', mandante: true, competicao: 'nba' },
+  { data: '2027-04-09', hora: '22:00', adversario: 'Minnesota Timberwolves', mandante: true, competicao: 'nba' },
+  { data: '2027-04-11', hora: '20:30', adversario: 'Phoenix Suns', mandante: true, competicao: 'nba' },
+];
 
 const TEAMS = {
   'man-utd': { nome: 'Manchester United', liga: 'Premier League', fixtures: MAN_UTD, icon: 'MU' },
   'lakers': { nome: 'LA Lakers', liga: 'NBA', fixtures: LAKERS, icon: 'LA' },
   'bengals': { nome: 'Cincinnati Bengals', liga: 'NFL', fixtures: BENGALS, icon: 'CIN' },
-  'santos': { nome: 'Santos FC', liga: 'Brasileirão + Copa do Brasil', fixtures: SANTOS, icon: 'SAN' },
+  'santos': { nome: 'Santos FC', liga: 'Brasileirão + Copa do Brasil + Sul-Americana', fixtures: SANTOS, icon: 'SAN' },
+  'dodgers': { nome: 'Los Angeles Dodgers', liga: 'MLB', fixtures: DODGERS, icon: 'LAD' },
 };
 
 const COMP_LABEL = {
   'nfl-pre': 'NFL · Pré-temporada', 'nfl-reg': 'NFL · Temporada',
-  'epl': 'Premier League', 'nba': 'NBA',
+  'epl': 'Premier League', 'nba': 'NBA', 'nba-pre': 'NBA · Pré-temporada',
   'brasileirao': 'Brasileirão Série A', 'copa-do-brasil': 'Copa do Brasil',
+  'sudamericana': 'Copa Sul-Americana', 'mlb': 'MLB',
 };
 
 const CONFLICT_TAGS = ['trabalho', 'estudo', 'volei', 'futsal'];
@@ -421,6 +596,10 @@ const ICONS = {
   sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
   moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>',
   dumbbell: '<path d="M6.5 8.5v7M4 10v3M17.5 8.5v7M20 10v3M6.5 12h11"/><rect x="2" y="10.5" width="2" height="3" rx=".6"/><rect x="20" y="10.5" width="2" height="3" rx=".6"/>',
+  listView: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  kanbanView: '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/>',
+  tableView: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9.5 4v16"/>',
+  ganttView: '<path d="M4 6h8M4 12h13M4 18h6"/><circle cx="14" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.6" fill="currentColor" stroke="none"/>',
 };
 function svgIcon(name, size) {
   size = size || 18;
@@ -877,6 +1056,16 @@ function onGridHabit(habitId, dateISO) {
 }
 
 /* ---------------- rendering: TRABALHO ---------------- */
+const VIEW_TYPES = [
+  { id: 'quadro', icon: 'kanbanView', label: 'Quadro' },
+  { id: 'lista', icon: 'listView', label: 'Lista' },
+  { id: 'calendario', icon: 'calendar', label: 'Calendário' },
+  { id: 'gantt', icon: 'ganttView', label: 'Gantt' },
+  { id: 'tabela', icon: 'tableView', label: 'Tabela' },
+];
+let trabalhoViewType = 'quadro';
+let trabalhoCalMonth = todayISO().slice(0, 7);
+
 function renderTrabalho() {
   refreshTiers();
   let html = `<div class="content-header"><h1>Trabalho</h1><div class="sub">3 boards · tier sobe automaticamente com o atraso</div></div>`;
@@ -884,13 +1073,29 @@ function renderTrabalho() {
   html += `<div class="utabs">`;
   for (const b of WORK_BOARDS) html += `<button class="${trabalhoActiveBoard === b.id ? 'active' : ''}" onclick="onTrabalhoBoardTab('${b.id}')">${b.nome}</button>`;
   html += `</div>`;
+  html += `<div class="view-tabs">`;
+  for (const v of VIEW_TYPES) html += `<button class="${trabalhoViewType === v.id ? 'active' : ''}" onclick="onTrabalhoViewType('${v.id}')">${svgIcon(v.icon, 14)} ${v.label}</button>`;
+  html += `</div>`;
   html += `<div class="inline-form">
     <input type="text" id="new-title-work" placeholder="Nova tarefa...">
     <input type="date" id="new-prazo-work">
     <button class="btn" onclick="onAddWorkTask()">+ Adicionar</button>
   </div>`;
-  html += `<div class="kanban">`;
+
   const tasks = STATE.workTasks.filter(t => t.board === trabalhoActiveBoard);
+  if (trabalhoViewType === 'quadro') html += renderTrabalhoBoard(tasks);
+  else if (trabalhoViewType === 'lista') html += renderTrabalhoList(tasks);
+  else if (trabalhoViewType === 'calendario') html += renderTrabalhoCalendar(tasks);
+  else if (trabalhoViewType === 'gantt') html += renderTrabalhoGantt(tasks);
+  else if (trabalhoViewType === 'tabela') html += renderTrabalhoTable(tasks);
+
+  html += `</div>`;
+  document.getElementById('view-trabalho').innerHTML = html;
+}
+function onTrabalhoViewType(id) { trabalhoViewType = id; renderTrabalho(); }
+
+function renderTrabalhoBoard(tasks) {
+  let html = `<div class="kanban">`;
   for (const col of STATUS_COLS) {
     html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
     const colTasks = tasks.filter(t => t.status === col.id);
@@ -898,8 +1103,110 @@ function renderTrabalho() {
     for (const t of colTasks) html += renderWorkTaskCard(t);
     html += `</div></div>`;
   }
-  html += `</div></div>`;
-  document.getElementById('view-trabalho').innerHTML = html;
+  html += `</div>`;
+  return html;
+}
+
+function renderTrabalhoList(tasks) {
+  let html = '';
+  for (const col of STATUS_COLS) {
+    const colTasks = tasks.filter(t => t.status === col.id);
+    html += `<div class="list-group">
+      <div class="list-group-header"><span class="pill ${col.id === 'concluido' ? 'origin' : col.id === 'em_andamento' ? 'alta' : 'normal'}">${col.nome}</span><span class="r-meta">${colTasks.length}</span></div>`;
+    if (!colTasks.length) html += `<div class="empty-note">vazio</div>`;
+    for (const t of colTasks) {
+      html += `<div class="row-item">
+        <span class="r-text">${t.titulo}</span>
+        <span class="r-meta">${t.prazo || 'sem prazo'}</span>
+        <span class="pill ${t.tier}">${t.tier}</span>
+        <div class="t-actions">
+          <button onclick="onMoveWork('${t.id}',-1)" ${t.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
+          <button onclick="onMoveWork('${t.id}',1)" ${t.status === 'concluido' ? 'disabled' : ''}>▶</button>
+          <button onclick="onDeleteWork('${t.id}')">✕</button>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+function renderTrabalhoTable(tasks) {
+  let html = `<div style="overflow-x:auto"><table class="flat-table"><thead><tr>
+    <th>Nome</th><th>Status</th><th>Prazo</th><th>Tier</th><th>Compartilhada</th><th></th>
+  </tr></thead><tbody>`;
+  if (!tasks.length) html += `<tr><td colspan="6" class="empty-note">vazio</td></tr>`;
+  for (const t of tasks) {
+    const statusLabel = STATUS_COLS.find(c => c.id === t.status)?.nome || t.status;
+    html += `<tr>
+      <td>${t.titulo}</td>
+      <td><span class="pill normal">${statusLabel}</span></td>
+      <td>${t.prazo || '—'}</td>
+      <td><span class="pill ${t.tier}">${t.tier}</span></td>
+      <td>${t.compartilhada ? 'sim' : 'não'}</td>
+      <td><button class="btn ghost" style="padding:3px 8px" onclick="onDeleteWork('${t.id}')">✕</button></td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function renderTrabalhoCalendar(tasks) {
+  const byDate = {};
+  for (const t of tasks) { if (t.prazo) (byDate[t.prazo] = byDate[t.prazo] || []).push(t); }
+  const [y, m] = trabalhoCalMonth.split('-').map(Number);
+  const days = monthGridDays(trabalhoCalMonth);
+  let html = `<div class="cal-header">
+    <button class="btn ghost" onclick="onTrabalhoCalNav(-1)">‹</button>
+    <div class="cal-title">${MONTH_NAMES[m - 1]} ${y}</div>
+    <button class="btn ghost" onclick="onTrabalhoCalNav(1)">›</button>
+  </div>`;
+  html += `<div class="cal-grid">`;
+  for (const wd of WEEKDAY_SHORT) html += `<div class="cal-dow">${wd}</div>`;
+  for (const d of days) {
+    const iso = isoFromDate(d);
+    const inMonth = d.getMonth() === m - 1;
+    const dayTasks = byDate[iso] || [];
+    const shown = dayTasks.slice(0, 3);
+    const overflow = dayTasks.length - shown.length;
+    html += `<div class="cal-cell ${inMonth ? '' : 'out'} ${iso === todayISO() ? 'today' : ''}">
+      <div class="cal-daynum">${d.getDate()}</div>
+      ${shown.map(t => `<div class="cal-pill tier-${t.tier}">${t.titulo}</div>`).join('')}
+      ${overflow > 0 ? `<div class="cal-more">+ ${overflow} mais</div>` : ''}
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+function onTrabalhoCalNav(dir) { trabalhoCalMonth = addMonths(trabalhoCalMonth, dir); renderTrabalho(); }
+
+function renderTrabalhoGantt(tasks) {
+  const withDates = tasks.filter(t => t.prazo).sort((a, b) => a.prazo.localeCompare(b.prazo));
+  if (!withDates.length) return `<div class="empty-note">nenhuma tarefa com prazo para mostrar na timeline. (Gantt aqui marca a data de prazo — como as tarefas não têm data de início, não dá pra desenhar barras de duração.)</div>`;
+  const totalDays = 35;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const start = new Date(today); start.setDate(start.getDate() - 7);
+  const dayW = 100 / totalDays;
+  let header = '';
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    header += `<div class="gantt-day ${isoFromDate(d) === todayISO() ? 'today' : ''}" style="width:${dayW}%">${d.getDate()}</div>`;
+  }
+  let rows = '';
+  for (const t of withDates) {
+    const [y, m, d] = t.prazo.split('-').map(Number);
+    const dueDate = new Date(y, m - 1, d);
+    const offsetDays = Math.round((dueDate - start) / 86400000);
+    const inRange = offsetDays >= 0 && offsetDays < totalDays;
+    rows += `<div class="gantt-row">
+      <div class="gantt-label">${t.titulo}</div>
+      <div class="gantt-track">${inRange ? `<div class="gantt-marker tier-${t.tier}" style="left:${(offsetDays * dayW).toFixed(2)}%" title="${t.prazo}"></div>` : `<span class="r-meta">${t.prazo}</span>`}</div>
+    </div>`;
+  }
+  return `<div class="gantt-wrap">
+    <div class="gantt-header"><div class="gantt-label"></div><div class="gantt-track gantt-days">${header}</div></div>
+    ${rows}
+  </div>`;
 }
 function renderWorkTaskCard(t) {
   const overdue = daysOverdue(t.prazo) > 0 && t.status !== 'concluido';

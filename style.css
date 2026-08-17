@@ -623,7 +623,9 @@ svg.icon { display: block; flex-shrink: 0; }
 .game-row.comp-brasileirao, .game-row.comp-copa-do-brasil { border-left-color: #4f9c6c; }
 .game-row.comp-nfl-reg, .game-row.comp-nfl-pre { border-left-color: #c07a3a; }
 .game-row.comp-epl { border-left-color: #4c86ad; }
-.game-row.comp-nba { border-left-color: #7c62ab; }
+.game-row.comp-nba, .game-row.comp-nba-pre { border-left-color: #7c62ab; }
+.game-row.comp-mlb { border-left-color: #3f6fb0; }
+.game-row.comp-sudamericana { border-left-color: #2f8f86; }
 .g-team-icon {
   width: 34px; height: 34px;
   border-radius: 10px;
@@ -735,6 +737,88 @@ svg.icon { display: block; flex-shrink: 0; }
 .period-switch button.active { background: var(--primary); color: var(--primary-text); }
 
 .chart-wrap { margin: 6px 0 4px; }
+
+/* ---------------- view switcher (Lista/Quadro/Calendário/Gantt/Tabela) ---------------- */
+.view-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.view-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.view-tabs button.active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.view-tabs button svg { color: inherit; }
+
+/* list view (grouped by status) */
+.list-group { margin-bottom: 16px; }
+.list-group-header { display: flex; align-items: center; gap: 8px; padding: 6px 4px; margin-bottom: 4px; }
+
+/* flat table view */
+.flat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.flat-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-faint);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.flat-table td { padding: 9px 10px; border-bottom: 1px solid var(--border-soft); }
+.flat-table tr:last-child td { border-bottom: none; }
+.flat-table tr:hover td { background: var(--overlay-a); }
+
+/* calendar view */
+.cal-header { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 12px; }
+.cal-title { font-weight: 700; font-size: 15px; min-width: 160px; text-align: center; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border-soft); border: 1px solid var(--border-soft); border-radius: var(--radius-md); overflow: hidden; }
+.cal-dow { background: var(--bg-soft); text-align: center; font-size: 10.5px; font-weight: 700; color: var(--text-faint); padding: 6px 0; text-transform: uppercase; }
+.cal-cell { background: var(--card); min-height: 84px; padding: 6px; font-size: 11px; }
+.cal-cell.out { background: var(--bg-soft); opacity: .5; }
+.cal-cell.today .cal-daynum { background: var(--primary); color: var(--primary-text); border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
+.cal-daynum { font-weight: 700; margin-bottom: 4px; font-size: 11px; }
+.cal-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--overlay-b);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 2px solid var(--text-faint);
+}
+.cal-pill.tier-alta { border-left-color: #c99a2e; }
+.cal-pill.tier-urgente { border-left-color: #c0523a; }
+.cal-more { font-size: 10px; color: var(--text-muted); font-weight: 600; }
+
+/* gantt view */
+.gantt-wrap { overflow-x: auto; }
+.gantt-header, .gantt-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border-soft); min-width: 700px; }
+.gantt-header { border-bottom: 1px solid var(--border); }
+.gantt-label { width: 160px; flex-shrink: 0; padding: 8px 10px; font-size: 12px; font-weight: 600; display: flex; align-items: center; }
+.gantt-track { flex: 1; position: relative; min-height: 34px; display: flex; align-items: center; }
+.gantt-days { display: flex; }
+.gantt-day { text-align: center; font-size: 10px; color: var(--text-faint); padding: 8px 0; border-right: 1px solid var(--border-soft); }
+.gantt-day.today { color: var(--text); font-weight: 700; background: var(--overlay-a); }
+.gantt-marker {
+  position: absolute;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--mint-text);
+  transform: translateX(-50%);
+}
+.gantt-marker.tier-alta { background: #c99a2e; }
+.gantt-marker.tier-urgente { background: #c0523a; }
 
 /* folder-style quick-access row (Home) */
 .folder-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
