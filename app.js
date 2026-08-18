@@ -295,6 +295,26 @@ const COMP_LABEL = {
 const CONFLICT_TAGS = ['trabalho', 'estudo', 'volei', 'futsal'];
 const GAME_DURATION_MIN = 120; // fixtures only give kickoff time; assume ~2h match window for overlap checks
 
+/* ---------------- editable UI section titles / column labels ---------------- */
+const DEFAULT_UI_LABELS = {
+  cardProgresso: 'Progresso do Dia',
+  cardJogosHoje: 'Jogos de Hoje',
+  cardPrazosHoje: 'Prazos de Hoje',
+  cardAlertas: 'Alertas de Conflito',
+  cardTimeline: 'Timeline de Hoje',
+  cardHabitosRapidos: 'Hábitos Rápidos',
+  cardGradeSemanal: 'Grade Semanal',
+  cardHabitos: 'Hábitos',
+  cardRegistrarTreino: 'Registrar treino',
+  cardProgressoCarga: 'Progresso de carga',
+  cardHistoricoTreino: 'Histórico',
+  cardRegistrarMedidas: 'Registrar medidas',
+  cardEvolucaoPeso: 'Evolução do peso',
+  cardHistoricoMedidas: 'Histórico',
+  colNome: 'Nome', colStatus: 'Status', colPrazo: 'Prazo', colTier: 'Tier', colCompartilhada: 'Compartilhada',
+  statusAFazer: 'A Fazer', statusEmAndamento: 'Em Andamento', statusConcluido: 'Concluído',
+};
+
 /* ---------------- state / persistence ---------------- */
 function defaultState() {
   return {
@@ -317,6 +337,7 @@ function defaultState() {
       diario: 'Diário', financas: 'Finanças', objetivos: 'Objetivos',
       wishlist: 'Wish List', residencial: 'Residencial', veiculos: 'Veículos',
     },
+    uiLabels: { ...DEFAULT_UI_LABELS },
     personal: {
       alimentacao: [], hidratacao: [], atividade: [], cuidados: [], estudos: [],
       simpleLabels: { alimentacao: 'Alimentação', hidratacao: 'Hidratação', atividade: 'Atividade Física', cuidados: 'Cuidados', estudos: 'Estudos' },
@@ -383,6 +404,7 @@ function loadState() {
       customTabs: { ...def.customTabs, ...(parsed.customTabs || {}) },
       workBoards: (parsed.workBoards && parsed.workBoards.length) ? parsed.workBoards : def.workBoards,
       pessoalLabels: { ...def.pessoalLabels, ...(parsed.pessoalLabels || {}) },
+      uiLabels: { ...def.uiLabels, ...(parsed.uiLabels || {}) },
     };
   } catch (e) {
     return defaultState();
@@ -472,10 +494,14 @@ function deleteWorkBoard(id) {
   saveState();
 }
 const STATUS_COLS = [
-  { id: 'a_fazer', nome: 'A Fazer' },
-  { id: 'em_andamento', nome: 'Em Andamento' },
-  { id: 'concluido', nome: 'Concluído' },
+  { id: 'a_fazer', key: 'statusAFazer' },
+  { id: 'em_andamento', key: 'statusEmAndamento' },
+  { id: 'concluido', key: 'statusConcluido' },
 ];
+function statusLabel(id) {
+  const col = STATUS_COLS.find(c => c.id === id);
+  return col ? uiLabel(col.key) : id;
+}
 function cycleStatus(current, dir) {
   const ids = STATUS_COLS.map(c => c.id);
   let idx = ids.indexOf(current) + dir;
@@ -832,6 +858,19 @@ function navLabel(id) {
   const c = STATE.navConfig.find(x => x.id === id);
   return c ? c.label : id;
 }
+function uiLabel(key) { return STATE.uiLabels[key] || DEFAULT_UI_LABELS[key] || key; }
+function editableTitle(key, cls) {
+  return `<div class="${cls || 'card-title'}" style="display:flex;align-items:center;gap:6px">${uiLabel(key)}
+    <button class="nav-manage-btn" style="width:18px;height:18px;flex-shrink:0" onclick="onRenameUiLabel('${key}')" title="Renomear">${svgIcon('edit', 11)}</button>
+  </div>`;
+}
+function onRenameUiLabel(key) {
+  const label = prompt('Novo nome:', uiLabel(key));
+  if (!label || !label.trim()) return;
+  STATE.uiLabels[key] = label.trim();
+  saveState();
+  switchView(currentView);
+}
 function allNavTabs(includeHidden) {
   const builtins = STATE.navConfig
     .filter(c => includeHidden || c.visible)
@@ -946,7 +985,7 @@ function renderHoje() {
 
   html += `<div class="card-grid">`;
   html += `<div class="card">
-    <div class="card-title">Progresso do Dia</div>
+    ${editableTitle('cardProgresso')}
     <div class="card-sub">blocos da rotina concluídos</div>
     <div class="stat-hero">
       <span class="num">${doneBlocks}/${blocks.length}</span>
@@ -956,7 +995,7 @@ function renderHoje() {
   </div>`;
 
   html += `<div class="card">
-    <div class="card-title">Jogos de Hoje</div>
+    ${editableTitle('cardJogosHoje')}
     <div class="card-sub">${games.length ? games.length + ' jogo(s)' : 'nenhum jogo hoje'}</div>`;
   if (!games.length) {
     html += `<div class="empty-note">sem jogos dos times acompanhados hoje.</div>`;
@@ -973,7 +1012,7 @@ function renderHoje() {
   html += `<button class="see-more" onclick="onNav('jogos')">Ver todos os jogos ${svgIcon('arrowRight', 13)}</button></div>`;
 
   html += `<div class="card">
-    <div class="card-title">Prazos de Hoje</div>
+    ${editableTitle('cardPrazosHoje')}
     <div class="card-sub">${workToday0.length + personalToday0.length ? (workToday0.length + personalToday0.length) + ' pendente(s)' : 'nada vencendo hoje'}</div>`;
   if (!workToday0.length && !personalToday0.length) {
     html += `<div class="empty-note">nenhuma tarefa ou conta vence hoje.</div>`;
@@ -985,7 +1024,7 @@ function renderHoje() {
   html += `</div>`;
 
   if (conflicts.length) {
-    html += `<div class="card"><div class="card-title">Alertas de Conflito</div>`;
+    html += `<div class="card">${editableTitle('cardAlertas')}`;
     for (const c of conflicts) {
       html += `<div class="alert-item">${svgIcon('alert', 15)}<span><b>${c.g.teamNome}</b> às ${c.g.hora} sobrepõe <b>${c.block.nome}</b> (${c.block.hora_inicio}–${c.block.hora_fim || ''}).</span></div>`;
     }
@@ -1008,7 +1047,7 @@ function renderHoje() {
   for (const p of personalToday) rows.push({ sortKey: 1442, kind: 'personal', data: p });
   rows.sort((a, b) => a.sortKey - b.sortKey);
 
-  html += `<div class="card"><div class="card-title">Timeline de Hoje</div><div class="row-list">`;
+  html += `<div class="card">${editableTitle('cardTimeline')}<div class="row-list">`;
   if (!rows.length) html += `<div class="empty-note">nada agendado hoje...</div>`;
   for (const r of rows) {
     if (r.kind === 'block') {
@@ -1045,7 +1084,7 @@ function renderHoje() {
   }
   html += `</div></div>`;
 
-  html += `<div class="card"><div class="card-title">Hábitos Rápidos</div><div class="card-sub">toque para alternar</div>${renderHabitTiles(dateISO)}</div>`;
+  html += `<div class="card">${editableTitle('cardHabitosRapidos')}<div class="card-sub">toque para alternar</div>${renderHabitTiles(dateISO)}</div>`;
 
   document.getElementById('view-hoje').innerHTML = html;
 }
@@ -1078,7 +1117,7 @@ function onQuickHabit(habitId) {
 /* ---------------- rendering: ROTINA ---------------- */
 function renderRotina() {
   let html = `<div class="content-header"><h1>${navLabel('rotina')}</h1><div class="sub">grade semanal fixa e hábitos</div></div>`;
-  html += `<div class="card"><div class="card-title">Grade Semanal</div><div class="card-sub">blocos fixos por dia</div>`;
+  html += `<div class="card">${editableTitle('cardGradeSemanal')}<div class="card-sub">blocos fixos por dia</div>`;
   html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">`;
   for (let d = 0; d < 7; d++) {
     const blocks = ROUTINE[d];
@@ -1111,7 +1150,7 @@ function last7Dates() {
 }
 function renderHabitsPanel() {
   const week = last7Dates();
-  let html = `<div class="card"><div class="card-title">Hábitos</div><div class="card-sub">grid semanal · clique para alternar (vazio → feito → pulado)</div>`;
+  let html = `<div class="card">${editableTitle('cardHabitos')}<div class="card-sub">grid semanal · clique para alternar (vazio → feito → pulado)</div>`;
   html += `<div style="overflow-x:auto"><table class="habit-table"><thead><tr><th style="text-align:left">Hábito</th>`;
   for (const iso of week) html += `<th>${WEEKDAY_SHORT[weekdayOf(iso)]}</th>`;
   html += `</tr></thead><tbody>`;
@@ -1248,10 +1287,13 @@ function genericTaskCard(t, h) {
     </div>
   </div>`;
 }
+function editableTh(key) {
+  return `<span style="display:inline-flex;align-items:center;gap:4px">${uiLabel(key)}<button class="nav-manage-btn" style="width:14px;height:14px" onclick="onRenameUiLabel('${key}')" title="Renomear">${svgIcon('edit', 9)}</button></span>`;
+}
 function genericBoard(tasks, h) {
   let html = `<div class="kanban">`;
   for (const col of STATUS_COLS) {
-    html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
+    html += `<div class="kanban-col"><h4>${editableTh(col.key)}</h4><div class="col-body">`;
     const colTasks = tasks.filter(t => t.status === col.id);
     if (!colTasks.length) html += `<div class="empty-note">vazio</div>`;
     for (const t of colTasks) html += genericTaskCard(t, h);
@@ -1265,7 +1307,7 @@ function genericList(tasks, h) {
   for (const col of STATUS_COLS) {
     const colTasks = tasks.filter(t => t.status === col.id);
     html += `<div class="list-group">
-      <div class="list-group-header"><span class="pill ${col.id === 'concluido' ? 'origin' : col.id === 'em_andamento' ? 'alta' : 'normal'}">${col.nome}</span><span class="r-meta">${colTasks.length}</span></div>`;
+      <div class="list-group-header"><span class="pill ${col.id === 'concluido' ? 'origin' : col.id === 'em_andamento' ? 'alta' : 'normal'}">${statusLabel(col.id)}</span><span class="r-meta">${colTasks.length}</span></div>`;
     if (!colTasks.length) html += `<div class="empty-note">vazio</div>`;
     for (const t of colTasks) {
       html += `<div class="row-item">
@@ -1285,14 +1327,13 @@ function genericList(tasks, h) {
 }
 function genericTable(tasks, h) {
   let html = `<div style="overflow-x:auto"><table class="flat-table"><thead><tr>
-    <th>Nome</th><th>Status</th><th>Prazo</th><th>Tier</th><th>Compartilhada</th><th></th>
+    <th>${editableTh('colNome')}</th><th>${editableTh('colStatus')}</th><th>${editableTh('colPrazo')}</th><th>${editableTh('colTier')}</th><th>${editableTh('colCompartilhada')}</th><th></th>
   </tr></thead><tbody>`;
   if (!tasks.length) html += `<tr><td colspan="6" class="empty-note">vazio</td></tr>`;
   for (const t of tasks) {
-    const statusLabel = STATUS_COLS.find(c => c.id === t.status)?.nome || t.status;
     html += `<tr>
       <td>${t.titulo}</td>
-      <td><span class="pill normal">${statusLabel}</span></td>
+      <td><span class="pill normal">${statusLabel(t.status)}</span></td>
       <td>${t.prazo || '—'}</td>
       <td><span class="pill ${t.tier}">${t.tier}</span></td>
       <td>${t.compartilhada ? 'sim' : 'não'}</td>
@@ -1803,7 +1844,7 @@ function renderFitness() {
     if (!fitnessExercise && exercises.length) fitnessExercise = exercises[exercises.length - 1];
 
     html += `<div class="card">
-      <div class="card-title">Registrar treino</div>
+      ${editableTitle('cardRegistrarTreino')}
       <div class="inline-form">
         <input type="text" id="wo-exercicio" placeholder="Exercício (ex: Supino)">
         <input type="number" id="wo-series" placeholder="Séries" style="width:80px">
@@ -1815,7 +1856,7 @@ function renderFitness() {
     </div>`;
 
     html += `<div class="card">
-      <div class="card-title">Progresso de carga</div>`;
+      ${editableTitle('cardProgressoCarga')}`;
     if (!exercises.length) {
       html += `<div class="empty-note">registre um treino para ver o gráfico de evolução.</div>`;
     } else {
@@ -1829,7 +1870,7 @@ function renderFitness() {
     }
     html += `</div>`;
 
-    html += `<div class="card"><div class="card-title">Histórico</div><div class="row-list">`;
+    html += `<div class="card">${editableTitle('cardHistoricoTreino')}<div class="row-list">`;
     const recent = [...STATE.fitness.workouts].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
     if (!recent.length) html += `<div class="empty-note">nenhum treino registrado ainda.</div>`;
     for (const w of recent) {
@@ -1842,7 +1883,7 @@ function renderFitness() {
     html += `</div></div>`;
   } else {
     html += `<div class="card">
-      <div class="card-title">Registrar medidas</div>
+      ${editableTitle('cardRegistrarMedidas')}
       <div class="inline-form">
         <input type="number" id="me-peso" placeholder="Peso (kg)" style="width:100px">
         <input type="number" id="me-cintura" placeholder="Cintura (cm)" style="width:110px">
@@ -1855,12 +1896,12 @@ function renderFitness() {
     </div>`;
 
     html += `<div class="card">
-      <div class="card-title">Evolução do peso</div>
+      ${editableTitle('cardEvolucaoPeso')}
       <div class="inline-form" style="margin-bottom:10px">${periodSwitch(fitnessPeriod, 'onFitnessPeriod')}</div>
       <div class="chart-wrap">${svgLineChart(weightProgress(fitnessPeriod), { unit: 'kg' })}</div>
     </div>`;
 
-    html += `<div class="card"><div class="card-title">Histórico</div><div class="row-list">`;
+    html += `<div class="card">${editableTitle('cardHistoricoMedidas')}<div class="row-list">`;
     const recentM = [...STATE.fitness.medidas].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
     if (!recentM.length) html += `<div class="empty-note">nenhuma medida registrada ainda.</div>`;
     for (const m of recentM) {
@@ -1950,7 +1991,7 @@ function renderQuadro() {
   let html = `<div class="content-header"><h1>${navLabel('quadro')}</h1><div class="sub">tarefas compartilhadas / que dependem de terceiros, de qualquer área</div></div>`;
   html += `<div class="card"><div class="kanban">`;
   for (const col of STATUS_COLS) {
-    html += `<div class="kanban-col"><h4>${col.nome}</h4><div class="col-body">`;
+    html += `<div class="kanban-col"><h4>${editableTh(col.key)}</h4><div class="col-body">`;
     const items = all.filter(i => i.status === col.id);
     if (!items.length) html += `<div class="empty-note">vazio</div>`;
     for (const i of items) {
