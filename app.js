@@ -323,7 +323,115 @@ const DEFAULT_UI_LABELS = {
   cardHistoricoTransacoes: 'Histórico de Transações',
   cardContasPagar: 'Contas a Pagar',
   cardOrcamento: 'Orçamento por Categoria',
+  cardAvatarCorpo: 'Avatar do Corpo',
 };
+
+/* ---------------- draggable block system ---------------- */
+const BLOCK_CATALOG = {
+  hoje: { progresso: 'Progresso do Dia', jogosHoje: 'Jogos de Hoje', prazosHoje: 'Prazos de Hoje', timeline: 'Timeline de Hoje', habitosRapidos: 'Hábitos Rápidos' },
+  rotina: { gradeSemanal: 'Grade Semanal', habitos: 'Hábitos' },
+  'financas.overview': { saldoTotal: 'Saldo Total', receitasMes: 'Receitas do Mês', despesasMes: 'Despesas do Mês', economiaMes: 'Economia do Mês', gastosCategoria: 'Gastos por Categoria', evolucaoSaldo: 'Evolução do Saldo', historicoTransacoes: 'Histórico de Transações' },
+  'fitness.treinos': { avatarCorpo: 'Avatar do Corpo', progressoCarga: 'Progresso de Carga', historicoTreino: 'Histórico de Treinos' },
+  'fitness.medidas': { evolucaoPeso: 'Evolução do Peso', historicoMedidas: 'Histórico de Medidas' },
+};
+function defaultBlockLayout() {
+  const out = {};
+  for (const key of Object.keys(BLOCK_CATALOG)) out[key] = Object.keys(BLOCK_CATALOG[key]);
+  return out;
+}
+const BLOCK_WIDE = {
+  hoje: ['timeline', 'habitosRapidos'],
+  rotina: ['gradeSemanal', 'habitos'],
+  'financas.overview': ['gastosCategoria', 'evolucaoSaldo', 'historicoTransacoes'],
+  'fitness.treinos': ['avatarCorpo', 'progressoCarga', 'historicoTreino'],
+  'fitness.medidas': ['evolucaoPeso', 'historicoMedidas'],
+};
+function blockWrap(ctxKey, blockId, innerHtml) {
+  const wide = (BLOCK_WIDE[ctxKey] || []).includes(blockId);
+  return `<div class="block ${wide ? 'block-wide' : ''}" data-block="${blockId}" data-ctx="${ctxKey}">
+    <div class="block-controls">
+      <span class="block-drag-handle" title="Arrastar para reordenar">${svgIcon('grip', 13)}</span>
+      <button class="block-remove" title="Remover bloco" onclick="onRemoveBlock('${ctxKey}','${blockId}')">${svgIcon('close', 11)}</button>
+    </div>
+    ${innerHtml}
+  </div>`;
+}
+function renderBlockArea(ctxKey, renderers) {
+  const layout = (STATE.blockLayout[ctxKey] || []).filter(id => renderers[id]);
+  let html = `<div class="block-area" data-ctx="${ctxKey}">`;
+  html += layout.map(id => blockWrap(ctxKey, id, renderers[id]())).join('');
+  html += `</div>`;
+  html += addBlockPicker(ctxKey);
+  return html;
+}
+function addBlockPicker(ctxKey) {
+  const catalog = BLOCK_CATALOG[ctxKey] || {};
+  const layout = STATE.blockLayout[ctxKey] || [];
+  const missing = Object.keys(catalog).filter(id => !layout.includes(id));
+  if (!missing.length) return '';
+  const selId = 'add-block-' + ctxKey.replace('.', '-');
+  return `<div class="add-block-row">
+    <select id="${selId}" class="field-sm">${missing.map(id => `<option value="${id}">${catalog[id]}</option>`).join('')}</select>
+    <button class="btn ghost" onclick="onAddBlock('${ctxKey}')">${svgIcon('plus', 13)} Adicionar bloco</button>
+  </div>`;
+}
+function onAddBlock(ctxKey) {
+  const sel = document.getElementById('add-block-' + ctxKey.replace('.', '-'));
+  if (!sel || !sel.value) return;
+  if (!STATE.blockLayout[ctxKey]) STATE.blockLayout[ctxKey] = [];
+  STATE.blockLayout[ctxKey].push(sel.value);
+  saveState();
+  rerenderBlockCtx(ctxKey);
+}
+function onRemoveBlock(ctxKey, blockId) {
+  STATE.blockLayout[ctxKey] = (STATE.blockLayout[ctxKey] || []).filter(id => id !== blockId);
+  saveState();
+  rerenderBlockCtx(ctxKey);
+}
+function rerenderBlockCtx(ctxKey) {
+  if (ctxKey === 'hoje') renderHoje();
+  else if (ctxKey === 'rotina') renderRotina();
+  else if (ctxKey.startsWith('financas.')) renderFinancas();
+  else if (ctxKey.startsWith('fitness.')) renderFitness();
+}
+function initBlockDrag() {
+  let dragEl = null;
+  function onPointerMove(e) {
+    if (!dragEl) return;
+    const area = dragEl.closest('.block-area');
+    if (!area) return;
+    const siblings = [...area.querySelectorAll('.block:not(.dragging)')];
+    const after = siblings.find(sib => {
+      const r = sib.getBoundingClientRect();
+      return e.clientY <= r.top + r.height / 2;
+    });
+    if (after) area.insertBefore(dragEl, after);
+    else area.appendChild(dragEl);
+  }
+  function onPointerUp() {
+    if (!dragEl) return;
+    const area = dragEl.closest('.block-area');
+    dragEl.classList.remove('dragging');
+    if (area) {
+      const order = [...area.querySelectorAll('.block')].map(b => b.dataset.block);
+      STATE.blockLayout[area.dataset.ctx] = order;
+      saveState();
+    }
+    dragEl = null;
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+  }
+  document.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.block-drag-handle');
+    if (!handle) return;
+    dragEl = handle.closest('.block');
+    if (!dragEl) return;
+    dragEl.classList.add('dragging');
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    e.preventDefault();
+  });
+}
 
 const DEFAULT_FINANCE_CATEGORIES = ['Alimentação', 'Transporte', 'Moradia', 'Lazer', 'Saúde', 'Educação', 'Salário', 'Outros'];
 const FINANCE_CATEGORY_COLORS = ['mint', 'blue', 'amber', 'purple', 'orange', 'green', 'red'];
@@ -399,6 +507,7 @@ function defaultState() {
       { id: 'quadro', label: 'Quadro Conjunto', icon: 'layers', visible: true, order: 7 },
     ],
     customTabs: {},
+    blockLayout: defaultBlockLayout(),
     notif: { leadMinutes: 15, notifiedGames: {}, notifiedTasks: {}, notifiedBlocks: {} },
     installDismissed: false,
   };
@@ -434,6 +543,14 @@ function loadState() {
       },
       navConfig: mergeNavConfig(def.navConfig, parsed.navConfig),
       customTabs: { ...def.customTabs, ...(parsed.customTabs || {}) },
+      blockLayout: (() => {
+        const merged = {};
+        for (const key of Object.keys(def.blockLayout)) {
+          const saved = parsed.blockLayout && Array.isArray(parsed.blockLayout[key]) ? parsed.blockLayout[key] : null;
+          merged[key] = saved ? saved.filter(id => def.blockLayout[key].includes(id)) : def.blockLayout[key];
+        }
+        return merged;
+      })(),
       workBoards: (parsed.workBoards && parsed.workBoards.length) ? parsed.workBoards : def.workBoards,
       pessoalLabels: { ...def.pessoalLabels, ...(parsed.pessoalLabels || {}) },
       uiLabels: { ...def.uiLabels, ...(parsed.uiLabels || {}) },
@@ -616,9 +733,49 @@ function allPersonalWithOrigin() {
 }
 
 /* ---------------- fitness ---------------- */
-function addWorkout(exercicio, series, reps, carga, data) {
-  STATE.fitness.workouts.push({ id: 'wo' + Date.now() + Math.random().toString(36).slice(2, 6), exercicio, series, reps, carga, data });
+const MUSCLE_GROUPS = ['Peito', 'Costas', 'Ombros', 'Braços', 'Abdômen', 'Pernas', 'Glúteos'];
+function addWorkout(exercicio, series, reps, carga, data, grupo) {
+  STATE.fitness.workouts.push({ id: 'wo' + Date.now() + Math.random().toString(36).slice(2, 6), exercicio, series, reps, carga, data, grupo: grupo || null });
   saveState();
+}
+function muscleGroupIntensity(grupo) {
+  return Math.min(4, STATE.fitness.workouts.filter(w => w.grupo === grupo && withinPeriod(w.data, 7)).length);
+}
+function bodyAvatarBlock() {
+  const f = (grupo) => {
+    const lvl = muscleGroupIntensity(grupo);
+    if (!lvl) return `fill="var(--bg-soft)" stroke="var(--border-soft)" stroke-width="1"`;
+    const op = [0.35, 0.55, 0.78, 1][lvl - 1];
+    return `fill="var(--mint-text)" opacity="${op}" stroke="var(--border-soft)" stroke-width="1"`;
+  };
+  const svg = `<svg width="130" height="210" viewBox="0 0 120 220" style="flex-shrink:0">
+    <rect x="36" y="112" width="20" height="70" rx="8" ${f('Pernas')}/>
+    <rect x="64" y="112" width="20" height="70" rx="8" ${f('Pernas')}/>
+    <rect x="16" y="48" width="15" height="58" rx="7" ${f('Braços')}/>
+    <rect x="89" y="48" width="15" height="58" rx="7" ${f('Braços')}/>
+    <rect x="40" y="78" width="40" height="32" rx="8" ${f('Abdômen')}/>
+    <rect x="36" y="40" width="48" height="38" rx="10" ${f('Peito')}/>
+    <ellipse cx="30" cy="47" rx="15" ry="10" ${f('Ombros')}/>
+    <ellipse cx="90" cy="47" rx="15" ry="10" ${f('Ombros')}/>
+    <circle cx="60" cy="18" r="15" fill="var(--bg-soft)" stroke="var(--border-soft)" stroke-width="1"/>
+  </svg>`;
+  const legend = MUSCLE_GROUPS.map(g => {
+    const lvl = muscleGroupIntensity(g);
+    const op = lvl ? [0.35, 0.55, 0.78, 1][lvl - 1] : 1;
+    return `<div style="display:flex;align-items:center;gap:7px;font-size:12px">
+      <span style="width:9px;height:9px;border-radius:50%;background:${lvl ? 'var(--mint-text)' : 'var(--text-faint)'};opacity:${op};flex-shrink:0"></span>
+      <span style="flex:1">${g}</span>
+      <span style="color:var(--text-muted)">${lvl ? lvl + 'x / 7d' : 'sem treino'}</span>
+    </div>`;
+  }).join('');
+  return `<div class="card">
+    ${editableTitle('cardAvatarCorpo')}
+    <div class="card-sub">grupos musculares treinados nos últimos 7 dias</div>
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:8px">
+      ${svg}
+      <div style="flex:1;min-width:150px;display:flex;flex-direction:column;gap:7px">${legend}</div>
+    </div>
+  </div>`;
 }
 function removeWorkout(id) {
   const idx = STATE.fitness.workouts.findIndex(w => w.id === id);
@@ -789,6 +946,7 @@ const ICONS = {
   moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>',
   dumbbell: '<path d="M6.5 8.5v7M4 10v3M17.5 8.5v7M20 10v3M6.5 12h11"/><rect x="2" y="10.5" width="2" height="3" rx=".6"/><rect x="20" y="10.5" width="2" height="3" rx=".6"/>',
   wallet: '<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h13a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 18 18H5a1.5 1.5 0 0 1-1.5-1.5v-9Z"/><path d="M3.5 9.5h14.5"/><circle cx="16" cy="13.5" r="1.3" fill="currentColor" stroke="none"/>',
+  grip: '<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
   listView: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   kanbanView: '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/>',
   tableView: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9.5 4v16"/>',
@@ -1082,46 +1240,6 @@ function renderHoje() {
     <div class="sub">${WEEKDAY_NAMES[weekdayOf(dateISO)]}, ${dateISO} · tudo que importa hoje, num só lugar</div>
   </div>`;
 
-  html += `<div class="card-grid">`;
-  html += `<div class="card">
-    ${editableTitle('cardProgresso')}
-    <div class="card-sub">blocos da rotina concluídos</div>
-    <div class="stat-hero">
-      <span class="num">${doneBlocks}/${blocks.length}</span>
-      <span class="up-badge ${pct < 50 ? 'down' : ''}">${pct}%</span>
-    </div>
-    <button class="see-more" onclick="onNav('rotina')">Ver rotina completa ${svgIcon('arrowRight', 13)}</button>
-  </div>`;
-
-  html += `<div class="card">
-    ${editableTitle('cardJogosHoje')}
-    <div class="card-sub">${games.length ? games.length + ' jogo(s)' : 'nenhum jogo hoje'}</div>`;
-  if (!games.length) {
-    html += `<div class="empty-note">sem jogos dos times acompanhados hoje.</div>`;
-  } else {
-    for (const g of games) {
-      const hasConflict = gameConflict(g);
-      html += `<div class="mini-row">
-        <span class="mr-time">${g.hora || 'TBD'}</span>
-        <span class="mr-text">🏟 ${g.teamNome} x ${g.adversario}</span>
-        ${hasConflict ? '<span class="pill warn">⚠</span>' : ''}
-      </div>`;
-    }
-  }
-  html += `<button class="see-more" onclick="onNav('jogos')">Ver todos os jogos ${svgIcon('arrowRight', 13)}</button></div>`;
-
-  html += `<div class="card">
-    ${editableTitle('cardPrazosHoje')}
-    <div class="card-sub">${workToday0.length + personalToday0.length ? (workToday0.length + personalToday0.length) + ' pendente(s)' : 'nada vencendo hoje'}</div>`;
-  if (!workToday0.length && !personalToday0.length) {
-    html += `<div class="empty-note">nenhuma tarefa ou conta vence hoje.</div>`;
-  } else {
-    for (const t of workToday0) html += `<div class="mini-row"><span class="mr-text">💼 ${t.titulo}</span><span class="pill ${t.tier}">${t.tier}</span></div>`;
-    for (const p of personalToday0) html += `<div class="mini-row"><span class="mr-text">🏠 ${p.item.texto}</span><span class="pill origin">${p.origin}</span></div>`;
-  }
-  html += `<button class="see-more" onclick="onNav('trabalho')">Ver Trabalho ${svgIcon('arrowRight', 13)}</button></div>`;
-  html += `</div>`;
-
   if (conflicts.length) {
     html += `<div class="card">${editableTitle('cardAlertas')}`;
     for (const c of conflicts) {
@@ -1137,53 +1255,99 @@ function renderHoje() {
     .join('');
   if (homeAreas) html += `<div class="folder-row">${homeAreas}</div>`;
 
-  const rows = [];
-  for (const b of blocks) rows.push({ sortKey: timeToMin(b.hora_inicio), kind: 'block', data: b });
-  for (const g of games) rows.push({ sortKey: g.hora ? timeToMin(g.hora) : 1440, kind: 'game', data: g });
-  const workToday = STATE.workTasks.filter(t => t.prazo === dateISO && t.status !== 'concluido');
-  for (const t of workToday) rows.push({ sortKey: 1441, kind: 'work', data: t });
-  const personalToday = allPersonalWithOrigin().filter(x => x.item.data === dateISO && x.item.status !== 'concluido');
-  for (const p of personalToday) rows.push({ sortKey: 1442, kind: 'personal', data: p });
-  rows.sort((a, b) => a.sortKey - b.sortKey);
+  const renderers = {
+    progresso: () => `<div class="card">
+      ${editableTitle('cardProgresso')}
+      <div class="card-sub">blocos da rotina concluídos</div>
+      <div class="stat-hero">
+        <span class="num">${doneBlocks}/${blocks.length}</span>
+        <span class="up-badge ${pct < 50 ? 'down' : ''}">${pct}%</span>
+      </div>
+      <button class="see-more" onclick="onNav('rotina')">Ver rotina completa ${svgIcon('arrowRight', 13)}</button>
+    </div>`,
+    jogosHoje: () => {
+      let h = `<div class="card">
+        ${editableTitle('cardJogosHoje')}
+        <div class="card-sub">${games.length ? games.length + ' jogo(s)' : 'nenhum jogo hoje'}</div>`;
+      if (!games.length) {
+        h += `<div class="empty-note">sem jogos dos times acompanhados hoje.</div>`;
+      } else {
+        for (const g of games) {
+          const hasConflict = gameConflict(g);
+          h += `<div class="mini-row">
+            <span class="mr-time">${g.hora || 'TBD'}</span>
+            <span class="mr-text">🏟 ${g.teamNome} x ${g.adversario}</span>
+            ${hasConflict ? '<span class="pill warn">⚠</span>' : ''}
+          </div>`;
+        }
+      }
+      h += `<button class="see-more" onclick="onNav('jogos')">Ver todos os jogos ${svgIcon('arrowRight', 13)}</button></div>`;
+      return h;
+    },
+    prazosHoje: () => {
+      let h = `<div class="card">
+        ${editableTitle('cardPrazosHoje')}
+        <div class="card-sub">${workToday0.length + personalToday0.length ? (workToday0.length + personalToday0.length) + ' pendente(s)' : 'nada vencendo hoje'}</div>`;
+      if (!workToday0.length && !personalToday0.length) {
+        h += `<div class="empty-note">nenhuma tarefa ou conta vence hoje.</div>`;
+      } else {
+        for (const t of workToday0) h += `<div class="mini-row"><span class="mr-text">💼 ${t.titulo}</span><span class="pill ${t.tier}">${t.tier}</span></div>`;
+        for (const p of personalToday0) h += `<div class="mini-row"><span class="mr-text">🏠 ${p.item.texto}</span><span class="pill origin">${p.origin}</span></div>`;
+      }
+      h += `<button class="see-more" onclick="onNav('trabalho')">Ver Trabalho ${svgIcon('arrowRight', 13)}</button></div>`;
+      return h;
+    },
+    timeline: () => {
+      const rows = [];
+      for (const b of blocks) rows.push({ sortKey: timeToMin(b.hora_inicio), kind: 'block', data: b });
+      for (const g of games) rows.push({ sortKey: g.hora ? timeToMin(g.hora) : 1440, kind: 'game', data: g });
+      const workToday = STATE.workTasks.filter(t => t.prazo === dateISO && t.status !== 'concluido');
+      for (const t of workToday) rows.push({ sortKey: 1441, kind: 'work', data: t });
+      const personalToday = allPersonalWithOrigin().filter(x => x.item.data === dateISO && x.item.status !== 'concluido');
+      for (const p of personalToday) rows.push({ sortKey: 1442, kind: 'personal', data: p });
+      rows.sort((a, b) => a.sortKey - b.sortKey);
 
-  html += `<div class="card">${editableTitle('cardTimeline')}<div class="row-list">`;
-  if (!rows.length) html += `<div class="empty-note">nada agendado hoje...</div>`;
-  for (const r of rows) {
-    if (r.kind === 'block') {
-      const b = r.data;
-      const now = isBlockNow(b, dateISO);
-      const done = isBlockDone(dateISO, b.id);
-      html += `<div class="row-item timeline-row ${now ? 'now' : ''}">
-        <span class="r-time">${b.hora_inicio}</span>
-        <span class="r-text">${b.nome} ${b.tag ? `<span class="pill ${b.tag}">${tagLabel(b.tag)}</span>` : ''}</span>
-        <button class="check-circle ${done ? 'checked' : ''}" onclick="onToggleBlock('${b.id}')">${done ? '✓' : ''}</button>
-      </div>`;
-    } else if (r.kind === 'game') {
-      const g = r.data;
-      const hasConflict = gameConflict(g);
-      html += `<div class="row-item">
-        <span class="r-time">${g.hora || 'TBD'}</span>
-        <span class="r-text">🏟 ${g.teamNome} x ${g.adversario}</span>
-        ${hasConflict ? '<span class="pill warn">Conflito</span>' : ''}
-      </div>`;
-    } else if (r.kind === 'work') {
-      const t = r.data;
-      html += `<div class="row-item">
-        <span class="r-time">Prazo</span>
-        <span class="r-text">💼 ${t.titulo}</span>
-        <span class="pill ${t.tier}">${t.tier}</span>
-      </div>`;
-    } else if (r.kind === 'personal') {
-      html += `<div class="row-item">
-        <span class="r-time">Vence</span>
-        <span class="r-text">🏠 ${r.data.item.texto}</span>
-        <span class="pill origin">${r.data.origin}</span>
-      </div>`;
-    }
-  }
-  html += `</div></div>`;
-
-  html += `<div class="card">${editableTitle('cardHabitosRapidos')}<div class="card-sub">toque para alternar</div>${renderHabitTiles(dateISO)}</div>`;
+      let h = `<div class="card">${editableTitle('cardTimeline')}<div class="row-list">`;
+      if (!rows.length) h += `<div class="empty-note">nada agendado hoje...</div>`;
+      for (const r of rows) {
+        if (r.kind === 'block') {
+          const b = r.data;
+          const now = isBlockNow(b, dateISO);
+          const done = isBlockDone(dateISO, b.id);
+          h += `<div class="row-item timeline-row ${now ? 'now' : ''}">
+            <span class="r-time">${b.hora_inicio}</span>
+            <span class="r-text">${b.nome} ${b.tag ? `<span class="pill ${b.tag}">${tagLabel(b.tag)}</span>` : ''}</span>
+            <button class="check-circle ${done ? 'checked' : ''}" onclick="onToggleBlock('${b.id}')">${done ? '✓' : ''}</button>
+          </div>`;
+        } else if (r.kind === 'game') {
+          const g = r.data;
+          const hasConflict = gameConflict(g);
+          h += `<div class="row-item">
+            <span class="r-time">${g.hora || 'TBD'}</span>
+            <span class="r-text">🏟 ${g.teamNome} x ${g.adversario}</span>
+            ${hasConflict ? '<span class="pill warn">Conflito</span>' : ''}
+          </div>`;
+        } else if (r.kind === 'work') {
+          const t = r.data;
+          h += `<div class="row-item">
+            <span class="r-time">Prazo</span>
+            <span class="r-text">💼 ${t.titulo}</span>
+            <span class="pill ${t.tier}">${t.tier}</span>
+          </div>`;
+        } else if (r.kind === 'personal') {
+          h += `<div class="row-item">
+            <span class="r-time">Vence</span>
+            <span class="r-text">🏠 ${r.data.item.texto}</span>
+            <span class="pill origin">${r.data.origin}</span>
+          </div>`;
+        }
+      }
+      h += `</div></div>`;
+      return h;
+    },
+    habitosRapidos: () => `<div class="card">${editableTitle('cardHabitosRapidos')}<div class="card-sub">toque para alternar</div>${renderHabitTiles(dateISO)}</div>`,
+  };
+  html += renderBlockArea('hoje', renderers);
 
   document.getElementById('view-hoje').innerHTML = html;
 }
@@ -1216,23 +1380,28 @@ function onQuickHabit(habitId) {
 /* ---------------- rendering: ROTINA ---------------- */
 function renderRotina() {
   let html = `<div class="content-header"><h1>${navLabel('rotina')}</h1><div class="sub">grade semanal fixa e hábitos</div></div>`;
-  html += `<div class="card">${editableTitle('cardGradeSemanal')}<div class="card-sub">blocos fixos por dia</div>`;
-  html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">`;
-  for (let d = 0; d < 7; d++) {
-    const blocks = ROUTINE[d];
-    html += `<div class="mini-stat" style="padding:12px">
-      <div class="lbl" style="margin-bottom:8px;font-size:11px">${WEEKDAY_SHORT[d]}</div>`;
-    for (const b of blocks) {
-      html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border-soft);font-size:11.5px">
-        <span style="font-weight:700;min-width:74px">${b.hora_inicio}${b.hora_fim ? '–' + b.hora_fim : ''}</span>
-        <span style="flex:1">${b.nome}</span>
-      </div>`;
-    }
-    html += `</div>`;
-  }
-  html += `</div></div>`;
-
-  html += renderHabitsPanel();
+  const renderers = {
+    gradeSemanal: () => {
+      let h = `<div class="card">${editableTitle('cardGradeSemanal')}<div class="card-sub">blocos fixos por dia</div>`;
+      h += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">`;
+      for (let d = 0; d < 7; d++) {
+        const blocks = ROUTINE[d];
+        h += `<div class="mini-stat" style="padding:12px">
+          <div class="lbl" style="margin-bottom:8px;font-size:11px">${WEEKDAY_SHORT[d]}</div>`;
+        for (const b of blocks) {
+          h += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border-soft);font-size:11.5px">
+            <span style="font-weight:700;min-width:74px">${b.hora_inicio}${b.hora_fim ? '–' + b.hora_fim : ''}</span>
+            <span style="flex:1">${b.nome}</span>
+          </div>`;
+        }
+        h += `</div>`;
+      }
+      h += `</div></div>`;
+      return h;
+    },
+    habitos: () => renderHabitsPanel(),
+  };
+  html += renderBlockArea('rotina', renderers);
   document.getElementById('view-rotina').innerHTML = html;
 }
 function last30Dates() {
@@ -1951,13 +2120,6 @@ function renderFinancas() {
   </div>`;
 
   if (financeSub === 'overview') {
-    html += `<div class="card-grid" style="grid-template-columns:repeat(4,1fr)">`;
-    html += financeStatCard('cardSaldoTotal', saldoTotal(), null);
-    html += financeStatCard('cardReceitasMes', recNow, pctDelta(recNow, recPrev), 'var(--mint-text)');
-    html += financeStatCard('cardDespesasMes', despNow, pctDelta(despNow, despPrev), 'var(--red-text)');
-    html += financeStatCard('cardEconomiaMes', econNow, null, econNow >= 0 ? 'var(--mint-text)' : 'var(--red-text)');
-    html += `</div>`;
-
     const upcoming = STATE.finance.contas.filter(c => c.status !== 'concluido' && c.data).sort((a, b) => a.data.localeCompare(b.data))[0];
     if (upcoming) {
       html += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:14px 18px">
@@ -1967,38 +2129,63 @@ function renderFinancas() {
       </div>`;
     }
 
-    html += `<div class="card-grid" style="grid-template-columns:1.1fr 1.4fr">`;
     const catData = STATE.finance.categorias
       .map(cat => ({ cat, value: gastoPorCategoria(cat) }))
       .filter(x => x.value > 0)
       .sort((a, b) => b.value - a.value);
     const totalGasto = catData.reduce((s, x) => s + x.value, 0);
-    html += `<div class="card">
-      ${editableTitle('cardGastosCategoria')}
-      <div class="card-sub">despesas do mês por categoria</div>`;
-    if (!catData.length) {
-      html += `<div class="empty-note">nenhuma despesa registrada este mês.</div>`;
-    } else {
-      const segments = catData.map(x => ({ value: x.value, color: financeCategoryColor(x.cat) }));
-      html += `<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:8px">
-        ${svgDonutChart(segments, { centerLabel: fmtMoney(totalGasto) })}
-        <div style="flex:1;min-width:160px;display:flex;flex-direction:column;gap:7px">
-          ${catData.map(x => `<div style="display:flex;align-items:center;gap:7px;font-size:12px">
-            <span style="width:9px;height:9px;border-radius:50%;background:${financeCategoryColor(x.cat)};flex-shrink:0"></span>
-            <span style="flex:1">${x.cat}</span>
-            <span style="color:var(--text-muted)">${Math.round(x.value / totalGasto * 100)}%</span>
-          </div>`).join('')}
-        </div>
-      </div>`;
-    }
-    html += `</div>`;
 
-    html += `<div class="card">
-      ${editableTitle('cardEvolucaoSaldo')}
-      <div class="inline-form" style="margin-bottom:10px">${periodSwitch(financePeriod, 'onFinancePeriod')}</div>
-      <div class="chart-wrap">${svgLineChart(saldoEvolution(financePeriod), { fmt: fmtMoney })}</div>
-    </div>`;
-    html += `</div>`;
+    const renderers = {
+      saldoTotal: () => financeStatCard('cardSaldoTotal', saldoTotal(), null),
+      receitasMes: () => financeStatCard('cardReceitasMes', recNow, pctDelta(recNow, recPrev), 'var(--mint-text)'),
+      despesasMes: () => financeStatCard('cardDespesasMes', despNow, pctDelta(despNow, despPrev), 'var(--red-text)'),
+      economiaMes: () => financeStatCard('cardEconomiaMes', econNow, null, econNow >= 0 ? 'var(--mint-text)' : 'var(--red-text)'),
+      gastosCategoria: () => {
+        let h = `<div class="card">
+          ${editableTitle('cardGastosCategoria')}
+          <div class="card-sub">despesas do mês por categoria</div>`;
+        if (!catData.length) {
+          h += `<div class="empty-note">nenhuma despesa registrada este mês.</div>`;
+        } else {
+          const segments = catData.map(x => ({ value: x.value, color: financeCategoryColor(x.cat) }));
+          h += `<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:8px">
+            ${svgDonutChart(segments, { centerLabel: fmtMoney(totalGasto) })}
+            <div style="flex:1;min-width:160px;display:flex;flex-direction:column;gap:7px">
+              ${catData.map(x => `<div style="display:flex;align-items:center;gap:7px;font-size:12px">
+                <span style="width:9px;height:9px;border-radius:50%;background:${financeCategoryColor(x.cat)};flex-shrink:0"></span>
+                <span style="flex:1">${x.cat}</span>
+                <span style="color:var(--text-muted)">${Math.round(x.value / totalGasto * 100)}%</span>
+              </div>`).join('')}
+            </div>
+          </div>`;
+        }
+        h += `</div>`;
+        return h;
+      },
+      evolucaoSaldo: () => `<div class="card">
+        ${editableTitle('cardEvolucaoSaldo')}
+        <div class="inline-form" style="margin-bottom:10px">${periodSwitch(financePeriod, 'onFinancePeriod')}</div>
+        <div class="chart-wrap">${svgLineChart(saldoEvolution(financePeriod), { fmt: fmtMoney })}</div>
+      </div>`,
+      historicoTransacoes: () => {
+        let h = `<div class="card">${editableTitle('cardHistoricoTransacoes')}<div class="row-list">`;
+        const recent = [...STATE.finance.transacoes].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
+        if (!recent.length) h += `<div class="empty-note">nenhuma transação registrada ainda.</div>`;
+        for (const t of recent) {
+          const sign = t.tipo === 'receita' ? '+' : '−';
+          const color = t.tipo === 'receita' ? 'var(--mint-text)' : 'var(--red-text)';
+          h += `<div class="row-item">
+            <span class="r-text"><b>${t.categoria}</b>${t.obs ? ' — ' + t.obs : ''}</span>
+            <span class="r-meta" style="color:${color};font-weight:700">${sign} ${fmtMoney(t.valor)}</span>
+            <span class="r-meta">${t.data}</span>
+            <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveTransacao('${t.id}')">✕</button>
+          </div>`;
+        }
+        h += `</div></div>`;
+        return h;
+      },
+    };
+    html += renderBlockArea('financas.overview', renderers);
 
     html += `<div class="card">
       ${editableTitle('cardRegistrarTransacao')}
@@ -2016,21 +2203,6 @@ function renderFinancas() {
         <button class="btn" onclick="onAddTransacao()">+ Adicionar</button>
       </div>
     </div>`;
-
-    html += `<div class="card">${editableTitle('cardHistoricoTransacoes')}<div class="row-list">`;
-    const recent = [...STATE.finance.transacoes].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
-    if (!recent.length) html += `<div class="empty-note">nenhuma transação registrada ainda.</div>`;
-    for (const t of recent) {
-      const sign = t.tipo === 'receita' ? '+' : '−';
-      const color = t.tipo === 'receita' ? 'var(--mint-text)' : 'var(--red-text)';
-      html += `<div class="row-item">
-        <span class="r-text"><b>${t.categoria}</b>${t.obs ? ' — ' + t.obs : ''}</span>
-        <span class="r-meta" style="color:${color};font-weight:700">${sign} ${fmtMoney(t.valor)}</span>
-        <span class="r-meta">${t.data}</span>
-        <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveTransacao('${t.id}')">✕</button>
-      </div>`;
-    }
-    html += `</div></div>`;
   } else if (financeSub === 'contas') {
     html += valueListPanel('', 'finance.contas', { titleKey: 'cardContasPagar', withValor: true, withData: true });
   } else if (financeSub === 'orcamento') {
@@ -2051,7 +2223,7 @@ function renderFinancas() {
           <b>${cat}</b>
           <div style="display:flex;align-items:center;gap:6px">
             <span class="r-meta">${fmtMoney(gasto)} /</span>
-            <input type="number" value="${limite || ''}" placeholder="limite" style="width:90px" onchange="onSetOrcamento('${cat}', this.value)">
+            <input type="number" class="field-sm" value="${limite || ''}" placeholder="limite" style="width:90px" onchange="onSetOrcamento('${cat}', this.value)">
             <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveFinanceCategoria('${cat}')">✕</button>
           </div>
         </div>
@@ -2125,6 +2297,10 @@ function renderFitness() {
       ${editableTitle('cardRegistrarTreino')}
       <div class="inline-form">
         <input type="text" id="wo-exercicio" placeholder="Exercício (ex: Supino)">
+        <select id="wo-grupo" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
+          <option value="">Grupo (opcional)</option>
+          ${MUSCLE_GROUPS.map(g => `<option value="${g}">${g}</option>`).join('')}
+        </select>
         <input type="number" id="wo-series" placeholder="Séries" style="width:80px">
         <input type="number" id="wo-reps" placeholder="Reps" style="width:80px">
         <input type="number" id="wo-carga" placeholder="Carga (kg)" style="width:100px">
@@ -2133,32 +2309,40 @@ function renderFitness() {
       </div>
     </div>`;
 
-    html += `<div class="card">
-      ${editableTitle('cardProgressoCarga')}`;
-    if (!exercises.length) {
-      html += `<div class="empty-note">registre um treino para ver o gráfico de evolução.</div>`;
-    } else {
-      html += `<div class="inline-form" style="margin-bottom:10px">
-        <select id="wo-exercise-select" onchange="onSelectExercise(this.value)" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
-          ${exercises.map(e => `<option value="${e}" ${e === fitnessExercise ? 'selected' : ''}>${e}</option>`).join('')}
-        </select>
-        ${periodSwitch(fitnessPeriod, 'onFitnessPeriod')}
-      </div>`;
-      html += `<div class="chart-wrap">${svgLineChart(exerciseProgress(fitnessExercise, fitnessPeriod), { unit: 'kg' })}</div>`;
-    }
-    html += `</div>`;
-
-    html += `<div class="card">${editableTitle('cardHistoricoTreino')}<div class="row-list">`;
-    const recent = [...STATE.fitness.workouts].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
-    if (!recent.length) html += `<div class="empty-note">nenhum treino registrado ainda.</div>`;
-    for (const w of recent) {
-      html += `<div class="row-item">
-        <span class="r-text"><b>${w.exercicio}</b> — ${w.series}x${w.reps} · ${w.carga}kg</span>
-        <span class="r-meta">${w.data}</span>
-        <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveWorkout('${w.id}')">✕</button>
-      </div>`;
-    }
-    html += `</div></div>`;
+    const renderers = {
+      avatarCorpo: () => bodyAvatarBlock(),
+      progressoCarga: () => {
+        let h = `<div class="card">${editableTitle('cardProgressoCarga')}`;
+        if (!exercises.length) {
+          h += `<div class="empty-note">registre um treino para ver o gráfico de evolução.</div>`;
+        } else {
+          h += `<div class="inline-form" style="margin-bottom:10px">
+            <select id="wo-exercise-select" onchange="onSelectExercise(this.value)" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
+              ${exercises.map(e => `<option value="${e}" ${e === fitnessExercise ? 'selected' : ''}>${e}</option>`).join('')}
+            </select>
+            ${periodSwitch(fitnessPeriod, 'onFitnessPeriod')}
+          </div>`;
+          h += `<div class="chart-wrap">${svgLineChart(exerciseProgress(fitnessExercise, fitnessPeriod), { unit: 'kg' })}</div>`;
+        }
+        h += `</div>`;
+        return h;
+      },
+      historicoTreino: () => {
+        let h = `<div class="card">${editableTitle('cardHistoricoTreino')}<div class="row-list">`;
+        const recent = [...STATE.fitness.workouts].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
+        if (!recent.length) h += `<div class="empty-note">nenhum treino registrado ainda.</div>`;
+        for (const w of recent) {
+          h += `<div class="row-item">
+            <span class="r-text"><b>${w.exercicio}</b>${w.grupo ? ' · ' + w.grupo : ''} — ${w.series}x${w.reps} · ${w.carga}kg</span>
+            <span class="r-meta">${w.data}</span>
+            <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveWorkout('${w.id}')">✕</button>
+          </div>`;
+        }
+        h += `</div></div>`;
+        return h;
+      },
+    };
+    html += renderBlockArea('fitness.treinos', renderers);
   } else {
     html += `<div class="card">
       ${editableTitle('cardRegistrarMedidas')}
@@ -2173,29 +2357,34 @@ function renderFitness() {
       </div>
     </div>`;
 
-    html += `<div class="card">
-      ${editableTitle('cardEvolucaoPeso')}
-      <div class="inline-form" style="margin-bottom:10px">${periodSwitch(fitnessPeriod, 'onFitnessPeriod')}</div>
-      <div class="chart-wrap">${svgLineChart(weightProgress(fitnessPeriod), { unit: 'kg' })}</div>
-    </div>`;
-
-    html += `<div class="card">${editableTitle('cardHistoricoMedidas')}<div class="row-list">`;
-    const recentM = [...STATE.fitness.medidas].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
-    if (!recentM.length) html += `<div class="empty-note">nenhuma medida registrada ainda.</div>`;
-    for (const m of recentM) {
-      const parts = [];
-      if (m.peso != null) parts.push(`${m.peso}kg`);
-      if (m.cintura != null) parts.push(`cintura ${m.cintura}cm`);
-      if (m.peito != null) parts.push(`peito ${m.peito}cm`);
-      if (m.braco != null) parts.push(`braço ${m.braco}cm`);
-      if (m.coxa != null) parts.push(`coxa ${m.coxa}cm`);
-      html += `<div class="row-item">
-        <span class="r-text">${parts.join(' · ') || '—'}</span>
-        <span class="r-meta">${m.data}</span>
-        <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveMedida('${m.id}')">✕</button>
-      </div>`;
-    }
-    html += `</div></div>`;
+    const renderers = {
+      evolucaoPeso: () => `<div class="card">
+        ${editableTitle('cardEvolucaoPeso')}
+        <div class="inline-form" style="margin-bottom:10px">${periodSwitch(fitnessPeriod, 'onFitnessPeriod')}</div>
+        <div class="chart-wrap">${svgLineChart(weightProgress(fitnessPeriod), { unit: 'kg' })}</div>
+      </div>`,
+      historicoMedidas: () => {
+        let h = `<div class="card">${editableTitle('cardHistoricoMedidas')}<div class="row-list">`;
+        const recentM = [...STATE.fitness.medidas].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
+        if (!recentM.length) h += `<div class="empty-note">nenhuma medida registrada ainda.</div>`;
+        for (const m of recentM) {
+          const parts = [];
+          if (m.peso != null) parts.push(`${m.peso}kg`);
+          if (m.cintura != null) parts.push(`cintura ${m.cintura}cm`);
+          if (m.peito != null) parts.push(`peito ${m.peito}cm`);
+          if (m.braco != null) parts.push(`braço ${m.braco}cm`);
+          if (m.coxa != null) parts.push(`coxa ${m.coxa}cm`);
+          h += `<div class="row-item">
+            <span class="r-text">${parts.join(' · ') || '—'}</span>
+            <span class="r-meta">${m.data}</span>
+            <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveMedida('${m.id}')">✕</button>
+          </div>`;
+        }
+        h += `</div></div>`;
+        return h;
+      },
+    };
+    html += renderBlockArea('fitness.medidas', renderers);
   }
 
   document.getElementById('view-fitness').innerHTML = html;
@@ -2205,12 +2394,13 @@ function onSelectExercise(name) { fitnessExercise = name; renderFitness(); }
 function onFitnessPeriod(days) { fitnessPeriod = days; renderFitness(); }
 function onAddWorkout() {
   const exercicio = document.getElementById('wo-exercicio').value.trim();
+  const grupo = document.getElementById('wo-grupo').value;
   const series = parseFloat(document.getElementById('wo-series').value);
   const reps = parseFloat(document.getElementById('wo-reps').value);
   const carga = parseFloat(document.getElementById('wo-carga').value);
   const data = document.getElementById('wo-data').value || todayISO();
   if (!exercicio || isNaN(carga)) return;
-  addWorkout(exercicio, isNaN(series) ? null : series, isNaN(reps) ? null : reps, carga, data);
+  addWorkout(exercicio, isNaN(series) ? null : series, isNaN(reps) ? null : reps, carga, data, grupo);
   fitnessExercise = exercicio;
   renderFitness();
   renderSidebar();
@@ -2459,6 +2649,7 @@ function init() {
 
   refreshTiers();
   renderSidebar();
+  initBlockDrag();
 
   const initial = (window.location.hash || '#hoje').replace('#', '');
   switchView(initial);

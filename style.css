@@ -619,7 +619,65 @@ svg.icon { display: block; flex-shrink: 0; }
   outline: none;
 }
 .inline-form input:focus { border-color: var(--focus-border); background: var(--panel-solid); }
+.field-sm {
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text);
+  outline: none;
+}
+.field-sm:focus { border-color: var(--focus-border); background: var(--panel-solid); }
+
+/* draggable blocks */
+.block-area { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
+.block { position: relative; }
+.block-wide { grid-column: 1 / -1; }
+.block-area .block .card { margin-bottom: 0; height: 100%; }
+.block.dragging { opacity: .45; }
+.block-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 2;
+}
+.block:hover .block-controls, .block.dragging .block-controls { opacity: 1; }
+.block-drag-handle {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  cursor: grab;
+  touch-action: none;
+}
+.block-drag-handle:hover { background: var(--overlay-a); color: var(--text-muted); }
+.block-remove {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.block-remove:hover { background: var(--red-bg); color: var(--red-text); }
+.add-block-row { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; }
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
   font-weight: 600;
   border: none;
@@ -955,7 +1013,7 @@ svg.icon { display: block; flex-shrink: 0; }
   .app-shell.sidebar-open .sidebar-backdrop { display: block; }
   .sidebar-backdrop { display: none; }
   .content-area { padding: 70px 16px 50px; width: 100%; }
-  .card-grid, .kanban { grid-template-columns: 1fr; }
+  .card-grid, .kanban, .block-area { grid-template-columns: 1fr; }
   .content-header h1 { font-size: 26px; }
   .stat-hero .num { font-size: 42px; }
   .heatmap { grid-template-columns: repeat(10, 1fr); }
