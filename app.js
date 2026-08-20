@@ -313,7 +313,25 @@ const DEFAULT_UI_LABELS = {
   cardHistoricoMedidas: 'Histórico',
   colNome: 'Nome', colStatus: 'Status', colPrazo: 'Prazo', colTier: 'Tier', colCompartilhada: 'Compartilhada',
   statusAFazer: 'A Fazer', statusEmAndamento: 'Em Andamento', statusConcluido: 'Concluído',
+  cardSaldoTotal: 'Saldo Total',
+  cardReceitasMes: 'Receitas do Mês',
+  cardDespesasMes: 'Despesas do Mês',
+  cardEconomiaMes: 'Economia do Mês',
+  cardGastosCategoria: 'Gastos por Categoria',
+  cardEvolucaoSaldo: 'Evolução do Saldo',
+  cardRegistrarTransacao: 'Registrar Transação',
+  cardHistoricoTransacoes: 'Histórico de Transações',
+  cardContasPagar: 'Contas a Pagar',
+  cardOrcamento: 'Orçamento por Categoria',
 };
+
+const DEFAULT_FINANCE_CATEGORIES = ['Alimentação', 'Transporte', 'Moradia', 'Lazer', 'Saúde', 'Educação', 'Salário', 'Outros'];
+const FINANCE_CATEGORY_COLORS = ['mint', 'blue', 'amber', 'purple', 'orange', 'green', 'red'];
+function financeCategoryColor(cat) {
+  const idx = STATE.finance.categorias.indexOf(cat);
+  const c = FINANCE_CATEGORY_COLORS[(idx >= 0 ? idx : 0) % FINANCE_CATEGORY_COLORS.length];
+  return `var(--${c}-text)`;
+}
 
 /* ---------------- state / persistence ---------------- */
 function defaultState() {
@@ -334,7 +352,7 @@ function defaultState() {
       { id: 'w5', board: 'prospeccao-ativa', titulo: 'Ligar 20 leads frios', prazo: '2026-08-03', status: 'a_fazer', tier: 'normal', compartilhada: false },
     ],
     pessoalLabels: {
-      diario: 'Diário', financas: 'Finanças', objetivos: 'Objetivos',
+      diario: 'Diário', objetivos: 'Objetivos',
       wishlist: 'Wish List', residencial: 'Residencial', veiculos: 'Veículos',
     },
     uiLabels: { ...DEFAULT_UI_LABELS },
@@ -342,10 +360,6 @@ function defaultState() {
       alimentacao: [], hidratacao: [], atividade: [], cuidados: [], estudos: [],
       simpleLabels: { alimentacao: 'Alimentação', hidratacao: 'Hidratação', atividade: 'Atividade Física', cuidados: 'Cuidados', estudos: 'Estudos' },
       customLists: {},
-      financas: [
-        { id: 'f1', texto: 'Aluguel', valor: 1800, data: '2026-08-05', status: 'a_fazer', compartilhada: false },
-        { id: 'f2', texto: 'Internet', valor: 120, data: '2026-08-10', status: 'a_fazer', compartilhada: false },
-      ],
       objetivos: [
         { id: 'o1', texto: 'Fechar 3 imóveis no trimestre', valor: null, data: '2026-09-30', status: 'em_andamento', compartilhada: false },
       ],
@@ -365,14 +379,24 @@ function defaultState() {
       workouts: [],
       medidas: [],
     },
+    finance: {
+      contas: [
+        { id: 'f1', texto: 'Aluguel', valor: 1800, data: '2026-08-05', status: 'a_fazer', compartilhada: false },
+        { id: 'f2', texto: 'Internet', valor: 120, data: '2026-08-10', status: 'a_fazer', compartilhada: false },
+      ],
+      transacoes: [],
+      categorias: [...DEFAULT_FINANCE_CATEGORIES],
+      orcamentos: {},
+    },
     navConfig: [
       { id: 'hoje', label: 'Hoje', icon: 'home', visible: true, order: 0 },
       { id: 'rotina', label: 'Rotina', icon: 'calendar', visible: true, order: 1 },
       { id: 'trabalho', label: 'Trabalho', icon: 'briefcase', visible: true, order: 2 },
       { id: 'pessoal', label: 'Pessoal', icon: 'heart', visible: true, order: 3 },
-      { id: 'fitness', label: 'Fitness', icon: 'dumbbell', visible: true, order: 4 },
-      { id: 'jogos', label: 'Jogos', icon: 'trophy', visible: true, order: 5 },
-      { id: 'quadro', label: 'Quadro Conjunto', icon: 'layers', visible: true, order: 6 },
+      { id: 'financas', label: 'Finanças', icon: 'wallet', visible: true, order: 4 },
+      { id: 'fitness', label: 'Fitness', icon: 'dumbbell', visible: true, order: 5 },
+      { id: 'jogos', label: 'Jogos', icon: 'trophy', visible: true, order: 6 },
+      { id: 'quadro', label: 'Quadro Conjunto', icon: 'layers', visible: true, order: 7 },
     ],
     customTabs: {},
     notif: { leadMinutes: 15, notifiedGames: {}, notifiedTasks: {}, notifiedBlocks: {} },
@@ -400,6 +424,14 @@ function loadState() {
         customLists: { ...def.personal.customLists, ...((parsed.personal && parsed.personal.customLists) || {}) },
       },
       fitness: { ...def.fitness, ...(parsed.fitness || {}) },
+      finance: {
+        ...def.finance, ...(parsed.finance || {}),
+        contas: (parsed.finance && parsed.finance.contas && parsed.finance.contas.length)
+          ? parsed.finance.contas
+          : ((parsed.personal && parsed.personal.financas && parsed.personal.financas.length) ? parsed.personal.financas : def.finance.contas),
+        categorias: (parsed.finance && parsed.finance.categorias && parsed.finance.categorias.length) ? parsed.finance.categorias : def.finance.categorias,
+        orcamentos: { ...def.finance.orcamentos, ...((parsed.finance && parsed.finance.orcamentos) || {}) },
+      },
       navConfig: mergeNavConfig(def.navConfig, parsed.navConfig),
       customTabs: { ...def.customTabs, ...(parsed.customTabs || {}) },
       workBoards: (parsed.workBoards && parsed.workBoards.length) ? parsed.workBoards : def.workBoards,
@@ -516,6 +548,7 @@ function renameSimpleLabel(key, label) { STATE.personal.simpleLabels[key] = labe
 function personalListRef(path) {
   if (path.startsWith('residencial.')) return STATE.personal.residencial[path.split('.')[1]];
   if (path.startsWith('custom.')) return STATE.personal.customLists[path.split('.')[1]].items;
+  if (path === 'finance.contas') return STATE.finance.contas;
   return STATE.personal[path];
 }
 function addPessoalCategory(label) {
@@ -535,7 +568,7 @@ function deletePessoalCategory(id) {
   saveState();
 }
 function allPessoalTabs() {
-  const builtins = ['diario', 'financas', 'objetivos', 'wishlist', 'residencial', 'veiculos']
+  const builtins = ['diario', 'objetivos', 'wishlist', 'residencial', 'veiculos']
     .map(id => ({ id, label: STATE.pessoalLabels[id] || id, builtin: true }));
   const customs = Object.values(STATE.personal.customLists)
     .sort((a, b) => a.order - b.order)
@@ -572,7 +605,7 @@ function allPersonalWithOrigin() {
   for (const [subKey, subLabel] of [['limpeza', 'Limpeza da Casa'], ['lixo', 'Troca de Lixo'], ['gatos', 'Cuidados com os Gatos']]) {
     for (const item of STATE.personal.residencial[subKey]) out.push({ item, origin: (STATE.pessoalLabels.residencial || 'Residencial') + ' · ' + subLabel, path: 'residencial.' + subKey });
   }
-  for (const item of STATE.personal.financas) out.push({ item, origin: STATE.pessoalLabels.financas || 'Finanças', path: 'financas' });
+  for (const item of STATE.finance.contas) out.push({ item, origin: navLabel('financas'), path: 'finance.contas' });
   for (const item of STATE.personal.objetivos) out.push({ item, origin: STATE.pessoalLabels.objetivos || 'Objetivos', path: 'objetivos' });
   for (const item of STATE.personal.wishlist) out.push({ item, origin: STATE.pessoalLabels.wishlist || 'Wish List', path: 'wishlist' });
   for (const item of STATE.personal.veiculos) out.push({ item, origin: STATE.pessoalLabels.veiculos || 'Veículos', path: 'veiculos' });
@@ -631,6 +664,46 @@ function weightProgress(days) {
 function countFitnessRecent() {
   return STATE.fitness.workouts.filter(w => withinPeriod(w.data, 7)).length + STATE.fitness.medidas.filter(m => withinPeriod(m.data, 7)).length;
 }
+
+/* ---------------- finance ---------------- */
+function addTransacao(tipo, categoria, valor, data, obs) {
+  STATE.finance.transacoes.push({ id: 'tx' + Date.now() + Math.random().toString(36).slice(2, 6), tipo, categoria, valor, data, obs: obs || '' });
+  saveState();
+}
+function removeTransacao(id) {
+  const idx = STATE.finance.transacoes.findIndex(t => t.id === id);
+  if (idx >= 0) STATE.finance.transacoes.splice(idx, 1);
+  saveState();
+}
+function saldoTotal() {
+  return STATE.finance.transacoes.reduce((s, t) => s + (t.tipo === 'receita' ? t.valor : -t.valor), 0);
+}
+function monthKey(dateISO) { return dateISO.slice(0, 7); }
+function prevMonthKey(mk) {
+  const [y, m] = mk.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function transacoesByMonth(mk) { return STATE.finance.transacoes.filter(t => monthKey(t.data) === mk); }
+function receitasByMonth(mk) { return transacoesByMonth(mk).filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0); }
+function despesasByMonth(mk) { return transacoesByMonth(mk).filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0); }
+function gastoPorCategoria(categoria) {
+  return transacoesByMonth(monthKey(todayISO())).filter(t => t.tipo === 'despesa' && t.categoria === categoria).reduce((s, t) => s + t.valor, 0);
+}
+function pctDelta(curr, prev) {
+  if (!prev) return null;
+  return Math.round(((curr - prev) / Math.abs(prev)) * 100);
+}
+function saldoEvolution(days) {
+  const sorted = [...STATE.finance.transacoes].sort((a, b) => a.data.localeCompare(b.data));
+  let running = 0;
+  const points = [];
+  for (const t of sorted) {
+    running += t.tipo === 'receita' ? t.valor : -t.valor;
+    if (withinPeriod(t.data, days)) points.push({ x: t.data, y: Math.round(running * 100) / 100 });
+  }
+  return points;
+}
 function svgLineChart(points, opts) {
   opts = opts || {};
   const w = 560, h = 160;
@@ -655,6 +728,7 @@ function svgLineChart(points, opts) {
   }).join('');
   const dots = points.map((p, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.y).toFixed(1)}" r="${i === points.length - 1 ? 3.5 : 2.2}" fill="var(--mint-text)"/>`).join('');
   const last = points[points.length - 1];
+  const lastLabel = opts.fmt ? opts.fmt(last.y) : `${last.y}${opts.unit || ''}`;
   return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="overflow:visible">
     ${gridLines}
     <path d="${areaD}" fill="var(--mint-bg)" opacity="0.5"/>
@@ -662,9 +736,32 @@ function svgLineChart(points, opts) {
     ${dots}
     <text x="${padL}" y="${h - 6}" font-size="10" fill="var(--text-faint)">${points[0].x}</text>
     <text x="${w - padR}" y="${h - 6}" font-size="10" text-anchor="end" fill="var(--text-faint)">${last.x}</text>
-    <text x="${w - padR}" y="${padT + 8}" font-size="11" text-anchor="end" fill="var(--text)" font-weight="700">${last.y}${opts.unit || ''}</text>
+    <text x="${w - padR}" y="${padT + 8}" font-size="11" text-anchor="end" fill="var(--text)" font-weight="700">${lastLabel}</text>
   </svg>`;
 }
+function svgDonutChart(segments, opts) {
+  opts = opts || {};
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  const size = 150, r = 56, cx = size / 2, cy = size / 2, strokeW = 20;
+  const circumference = 2 * Math.PI * r;
+  if (!total) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border-soft)" stroke-width="${strokeW}"/>
+    </svg>`;
+  }
+  let offset = 0;
+  const circles = segments.map(seg => {
+    const dash = (seg.value / total) * circumference;
+    const circle = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${strokeW}" stroke-dasharray="${dash.toFixed(2)} ${(circumference - dash).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += dash;
+    return circle;
+  }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0">
+    ${circles}
+    <text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="13" font-weight="800" fill="var(--text)">${opts.centerLabel || ''}</text>
+  </svg>`;
+}
+function fmtMoney(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
 /* ---------------- icons (minimal hand-drawn line set) ---------------- */
 const ICONS = {
@@ -691,6 +788,7 @@ const ICONS = {
   sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
   moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>',
   dumbbell: '<path d="M6.5 8.5v7M4 10v3M17.5 8.5v7M20 10v3M6.5 12h11"/><rect x="2" y="10.5" width="2" height="3" rx=".6"/><rect x="20" y="10.5" width="2" height="3" rx=".6"/>',
+  wallet: '<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h13a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 18 18H5a1.5 1.5 0 0 1-1.5-1.5v-9Z"/><path d="M3.5 9.5h14.5"/><circle cx="16" cy="13.5" r="1.3" fill="currentColor" stroke="none"/>',
   listView: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   kanbanView: '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="9.5" y="4" width="5" height="10" rx="1"/><rect x="16" y="4" width="5" height="13" rx="1"/>',
   tableView: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9.5 4v16"/>',
@@ -723,7 +821,8 @@ function countHabitsPendingToday() {
   return HABITS.filter(h => (log[h.id] || 'none') === 'none').length;
 }
 function countTrabalhoOpen() { return STATE.workTasks.filter(t => t.status !== 'concluido').length; }
-function countPessoalOpen() { return allPersonalWithOrigin().filter(x => x.item.status !== 'concluido').length; }
+function countPessoalOpen() { return allPersonalWithOrigin().filter(x => x.path !== 'finance.contas' && x.item.status !== 'concluido').length; }
+function countFinancasOpen() { return openCount(STATE.finance.contas); }
 function countJogosBadge() { return gamesOnDate(todayISO()).length; }
 function countQuadroOpen() {
   const workShared = STATE.workTasks.filter(t => t.compartilhada && t.status !== 'concluido').length;
@@ -752,7 +851,7 @@ function habitStreak(habitId) {
 function bestStreak() { return Math.max(0, ...HABITS.map(h => habitStreak(h.id))); }
 
 /* ---------------- navigation state ---------------- */
-const TABS = ['hoje', 'rotina', 'trabalho', 'pessoal', 'fitness', 'jogos', 'quadro'];
+const TABS = ['hoje', 'rotina', 'trabalho', 'pessoal', 'financas', 'fitness', 'jogos', 'quadro'];
 let currentView = 'hoje';
 let activeTreeId = null;
 let pessoalSub = 'diario';
@@ -776,7 +875,6 @@ function buildTree() {
       id: 'node-pessoal', label: navLabel('pessoal'), count: countPessoalOpen(),
       children: [
         { id: 'p-diario', label: STATE.pessoalLabels.diario, count: PERSONAL_SIMPLE_KEYS.reduce((s, k) => s + openCount(STATE.personal[k]), 0), action: () => openPessoalTree('diario', 'p-diario') },
-        { id: 'p-financas', label: STATE.pessoalLabels.financas, count: openCount(STATE.personal.financas), action: () => openPessoalTree('financas', 'p-financas') },
         { id: 'p-objetivos', label: STATE.pessoalLabels.objetivos, count: openCount(STATE.personal.objetivos), action: () => openPessoalTree('objetivos', 'p-objetivos') },
         { id: 'p-wishlist', label: STATE.pessoalLabels.wishlist, count: openCount(STATE.personal.wishlist), action: () => openPessoalTree('wishlist', 'p-wishlist') },
         {
@@ -849,6 +947,7 @@ const BUILTIN_BADGE_FN = {
   rotina: countHabitsPendingToday,
   trabalho: countTrabalhoOpen,
   pessoal: countPessoalOpen,
+  financas: countFinancasOpen,
   fitness: countFitnessRecent,
   jogos: countJogosBadge,
   quadro: countQuadroOpen,
@@ -1031,7 +1130,7 @@ function renderHoje() {
     html += `</div>`;
   }
 
-  const homeAreas = ['trabalho', 'pessoal', 'jogos', 'quadro']
+  const homeAreas = ['trabalho', 'pessoal', 'financas', 'jogos', 'quadro']
     .map(id => STATE.navConfig.find(c => c.id === id))
     .filter(c => c && c.visible)
     .map(c => folderCard(c.id, c.icon, c.label, c.id === 'jogos' ? gamesOnDate(dateISO).length : (BUILTIN_BADGE_FN[c.id] ? BUILTIN_BADGE_FN[c.id]() : 0)))
@@ -1691,7 +1790,7 @@ function renderPessoal() {
   if (!tabs.find(t => t.id === pessoalSub)) pessoalSub = 'diario';
   const activeTab = tabs.find(t => t.id === pessoalSub);
 
-  let html = `<div class="content-header"><h1>${navLabel('pessoal')}</h1><div class="sub">rotina, finanças, objetivos e casa</div></div>`;
+  let html = `<div class="content-header"><h1>${navLabel('pessoal')}</h1><div class="sub">rotina, objetivos e casa</div></div>`;
   html += `<div class="utabs">`;
   for (const s of tabs) html += `<button class="${pessoalSub === s.id ? 'active' : ''}" onclick="onPessoalSub('${s.id}')">${s.label}</button>`;
   html += `</div>`;
@@ -1707,8 +1806,6 @@ function renderPessoal() {
     html += `<div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">`;
     for (const key of PERSONAL_SIMPLE_KEYS) html += simpleListPanel(key);
     html += `</div>`;
-  } else if (pessoalSub === 'financas') {
-    html += valueListPanel(STATE.pessoalLabels.financas + ' · Contas a Pagar', 'financas', { withValor: true, withData: true });
   } else if (pessoalSub === 'objetivos') {
     html += valueListPanel(STATE.pessoalLabels.objetivos, 'objetivos', { withValor: false, withData: true });
   } else if (pessoalSub === 'wishlist') {
@@ -1778,9 +1875,10 @@ function simpleListPanel(key) {
   return html;
 }
 function valueListPanel(label, path, opts) {
+  opts = opts || {};
   const list = personalListRef(path);
   const idPrefix = path.replace('.', '-');
-  let html = `<div class="card"><div class="card-title">${label}</div>`;
+  let html = `<div class="card">${opts.titleKey ? editableTitle(opts.titleKey) : `<div class="card-title">${label}</div>`}`;
   html += `<div class="inline-form"><input type="text" id="new-txt-${idPrefix}" placeholder="Descrição...">`;
   if (opts.withValor) html += `<input type="number" id="new-val-${idPrefix}" placeholder="Valor R$" style="width:100px">`;
   if (opts.withData) html += `<input type="date" id="new-date-${idPrefix}">`;
@@ -1810,6 +1908,7 @@ function onAddSimple(key) {
   renderPessoal();
   renderSidebar();
 }
+function renderOwnerOf(path) { if (path.startsWith('finance.')) renderFinancas(); else renderPessoal(); }
 function onAddValue(path, idPrefix, withValor, withData) {
   const txtEl = document.getElementById(`new-txt-${idPrefix}`);
   const texto = txtEl.value.trim();
@@ -1817,12 +1916,191 @@ function onAddValue(path, idPrefix, withValor, withData) {
   const valor = withValor ? parseFloat(document.getElementById(`new-val-${idPrefix}`).value) || null : null;
   const data = withData ? document.getElementById(`new-date-${idPrefix}`).value || null : null;
   addPersonalItem(path, texto, valor, data);
-  renderPessoal();
+  renderOwnerOf(path);
   renderSidebar();
 }
-function onTogglePersonal(path, id) { togglePersonalDone(path, id); renderPessoal(); renderSidebar(); }
-function onToggleSharedPersonal(path, id) { toggleShared(path, id); renderPessoal(); renderSidebar(); }
-function onRemovePersonal(path, id) { removePersonalItem(path, id); renderPessoal(); renderSidebar(); }
+function onTogglePersonal(path, id) { togglePersonalDone(path, id); renderOwnerOf(path); renderSidebar(); }
+function onToggleSharedPersonal(path, id) { toggleShared(path, id); renderOwnerOf(path); renderSidebar(); }
+function onRemovePersonal(path, id) { removePersonalItem(path, id); renderOwnerOf(path); renderSidebar(); }
+
+/* ---------------- rendering: FINANÇAS ---------------- */
+let financeSub = 'overview';
+let financePeriod = 90;
+function financeStatCard(titleKey, value, deltaPct, colorVar) {
+  const deltaHtml = deltaPct === null ? '' : `<span class="up-badge ${deltaPct < 0 ? 'down' : ''}">${deltaPct >= 0 ? '+' : ''}${deltaPct}% vs mês passado</span>`;
+  return `<div class="card">
+    ${editableTitle(titleKey)}
+    <div class="stat-hero">
+      <span class="num" style="font-size:26px;${colorVar ? `color:${colorVar}` : ''}">${fmtMoney(value)}</span>
+      ${deltaHtml}
+    </div>
+  </div>`;
+}
+function renderFinancas() {
+  const mkNow = monthKey(todayISO());
+  const mkPrev = prevMonthKey(mkNow);
+  const recNow = receitasByMonth(mkNow), recPrev = receitasByMonth(mkPrev);
+  const despNow = despesasByMonth(mkNow), despPrev = despesasByMonth(mkPrev);
+  const econNow = recNow - despNow, econPrev = recPrev - despPrev;
+
+  let html = `<div class="content-header"><h1>${navLabel('financas')}</h1><div class="sub">receitas, despesas, contas a pagar e orçamento</div></div>`;
+  html += `<div class="utabs">
+    <button class="${financeSub === 'overview' ? 'active' : ''}" onclick="onFinanceSub('overview')">Visão Geral</button>
+    <button class="${financeSub === 'contas' ? 'active' : ''}" onclick="onFinanceSub('contas')">Contas a Pagar</button>
+    <button class="${financeSub === 'orcamento' ? 'active' : ''}" onclick="onFinanceSub('orcamento')">Orçamento</button>
+  </div>`;
+
+  if (financeSub === 'overview') {
+    html += `<div class="card-grid" style="grid-template-columns:repeat(4,1fr)">`;
+    html += financeStatCard('cardSaldoTotal', saldoTotal(), null);
+    html += financeStatCard('cardReceitasMes', recNow, pctDelta(recNow, recPrev), 'var(--mint-text)');
+    html += financeStatCard('cardDespesasMes', despNow, pctDelta(despNow, despPrev), 'var(--red-text)');
+    html += financeStatCard('cardEconomiaMes', econNow, null, econNow >= 0 ? 'var(--mint-text)' : 'var(--red-text)');
+    html += `</div>`;
+
+    const upcoming = STATE.finance.contas.filter(c => c.status !== 'concluido' && c.data).sort((a, b) => a.data.localeCompare(b.data))[0];
+    if (upcoming) {
+      html += `<div class="card" style="display:flex;align-items:center;gap:10px;padding:14px 18px">
+        ${svgIcon('alert', 16)}
+        <span style="font-size:13px"><b>Próxima conta:</b> ${upcoming.texto} — ${fmtMoney(upcoming.valor || 0)} em ${upcoming.data}</span>
+        <button class="see-more" style="margin-left:auto" onclick="onFinanceSub('contas')">Ver contas ${svgIcon('arrowRight', 13)}</button>
+      </div>`;
+    }
+
+    html += `<div class="card-grid" style="grid-template-columns:1.1fr 1.4fr">`;
+    const catData = STATE.finance.categorias
+      .map(cat => ({ cat, value: gastoPorCategoria(cat) }))
+      .filter(x => x.value > 0)
+      .sort((a, b) => b.value - a.value);
+    const totalGasto = catData.reduce((s, x) => s + x.value, 0);
+    html += `<div class="card">
+      ${editableTitle('cardGastosCategoria')}
+      <div class="card-sub">despesas do mês por categoria</div>`;
+    if (!catData.length) {
+      html += `<div class="empty-note">nenhuma despesa registrada este mês.</div>`;
+    } else {
+      const segments = catData.map(x => ({ value: x.value, color: financeCategoryColor(x.cat) }));
+      html += `<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:8px">
+        ${svgDonutChart(segments, { centerLabel: fmtMoney(totalGasto) })}
+        <div style="flex:1;min-width:160px;display:flex;flex-direction:column;gap:7px">
+          ${catData.map(x => `<div style="display:flex;align-items:center;gap:7px;font-size:12px">
+            <span style="width:9px;height:9px;border-radius:50%;background:${financeCategoryColor(x.cat)};flex-shrink:0"></span>
+            <span style="flex:1">${x.cat}</span>
+            <span style="color:var(--text-muted)">${Math.round(x.value / totalGasto * 100)}%</span>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="card">
+      ${editableTitle('cardEvolucaoSaldo')}
+      <div class="inline-form" style="margin-bottom:10px">${periodSwitch(financePeriod, 'onFinancePeriod')}</div>
+      <div class="chart-wrap">${svgLineChart(saldoEvolution(financePeriod), { fmt: fmtMoney })}</div>
+    </div>`;
+    html += `</div>`;
+
+    html += `<div class="card">
+      ${editableTitle('cardRegistrarTransacao')}
+      <div class="inline-form">
+        <select id="tx-tipo" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
+          <option value="despesa">Despesa</option>
+          <option value="receita">Receita</option>
+        </select>
+        <select id="tx-categoria" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
+          ${STATE.finance.categorias.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
+        <input type="number" id="tx-valor" placeholder="Valor (R$)" style="width:120px">
+        <input type="date" id="tx-data" value="${todayISO()}">
+        <input type="text" id="tx-obs" placeholder="Observação (opcional)">
+        <button class="btn" onclick="onAddTransacao()">+ Adicionar</button>
+      </div>
+    </div>`;
+
+    html += `<div class="card">${editableTitle('cardHistoricoTransacoes')}<div class="row-list">`;
+    const recent = [...STATE.finance.transacoes].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
+    if (!recent.length) html += `<div class="empty-note">nenhuma transação registrada ainda.</div>`;
+    for (const t of recent) {
+      const sign = t.tipo === 'receita' ? '+' : '−';
+      const color = t.tipo === 'receita' ? 'var(--mint-text)' : 'var(--red-text)';
+      html += `<div class="row-item">
+        <span class="r-text"><b>${t.categoria}</b>${t.obs ? ' — ' + t.obs : ''}</span>
+        <span class="r-meta" style="color:${color};font-weight:700">${sign} ${fmtMoney(t.valor)}</span>
+        <span class="r-meta">${t.data}</span>
+        <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveTransacao('${t.id}')">✕</button>
+      </div>`;
+    }
+    html += `</div></div>`;
+  } else if (financeSub === 'contas') {
+    html += valueListPanel('', 'finance.contas', { titleKey: 'cardContasPagar', withValor: true, withData: true });
+  } else if (financeSub === 'orcamento') {
+    html += `<div class="card">
+      ${editableTitle('cardOrcamento')}
+      <div class="card-sub">defina um limite mensal por categoria e acompanhe o quanto já foi gasto este mês</div>
+      <div class="inline-form" style="margin-top:10px">
+        <input type="text" id="fc-nova-categoria" placeholder="Nova categoria...">
+        <button class="btn" onclick="onAddFinanceCategoria()">+ Categoria</button>
+      </div>
+      <div class="row-list">`;
+    for (const cat of STATE.finance.categorias) {
+      const gasto = gastoPorCategoria(cat);
+      const limite = STATE.finance.orcamentos[cat] || 0;
+      const pct = limite > 0 ? Math.min(100, Math.round((gasto / limite) * 100)) : 0;
+      html += `<div class="row-item" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <b>${cat}</b>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="r-meta">${fmtMoney(gasto)} /</span>
+            <input type="number" value="${limite || ''}" placeholder="limite" style="width:90px" onchange="onSetOrcamento('${cat}', this.value)">
+            <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveFinanceCategoria('${cat}')">✕</button>
+          </div>
+        </div>
+        <div style="height:6px;background:var(--bg-soft);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${pct >= 100 ? 'var(--red-text)' : 'var(--mint-text)'}"></div>
+        </div>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  document.getElementById('view-financas').innerHTML = html;
+}
+function onFinanceSub(id) { financeSub = id; renderFinancas(); }
+function onFinancePeriod(days) { financePeriod = days; renderFinancas(); }
+function onAddTransacao() {
+  const tipo = document.getElementById('tx-tipo').value;
+  const categoria = document.getElementById('tx-categoria').value;
+  const valor = parseFloat(document.getElementById('tx-valor').value);
+  const data = document.getElementById('tx-data').value || todayISO();
+  const obs = document.getElementById('tx-obs').value.trim();
+  if (!valor || valor <= 0) return;
+  addTransacao(tipo, categoria, valor, data, obs);
+  renderFinancas();
+  renderSidebar();
+}
+function onRemoveTransacao(id) { removeTransacao(id); renderFinancas(); renderSidebar(); }
+function onAddFinanceCategoria() {
+  const el = document.getElementById('fc-nova-categoria');
+  const nome = el.value.trim();
+  if (!nome || STATE.finance.categorias.includes(nome)) return;
+  STATE.finance.categorias.push(nome);
+  saveState();
+  renderFinancas();
+}
+function onRemoveFinanceCategoria(cat) {
+  if (!confirm(`Remover a categoria "${cat}"? Transações já registradas mantêm o nome antigo.`)) return;
+  STATE.finance.categorias = STATE.finance.categorias.filter(c => c !== cat);
+  delete STATE.finance.orcamentos[cat];
+  saveState();
+  renderFinancas();
+}
+function onSetOrcamento(cat, value) {
+  const n = parseFloat(value);
+  if (!n || n <= 0) delete STATE.finance.orcamentos[cat];
+  else STATE.finance.orcamentos[cat] = n;
+  saveState();
+  renderFinancas();
+}
 
 /* ---------------- rendering: FITNESS ---------------- */
 let fitnessSub = 'treinos';
@@ -2042,6 +2320,7 @@ function switchView(view) {
   else if (view === 'rotina') renderRotina();
   else if (view === 'trabalho') renderTrabalho();
   else if (view === 'pessoal') renderPessoal();
+  else if (view === 'financas') renderFinancas();
   else if (view === 'fitness') renderFitness();
   else if (view === 'jogos') renderJogos();
   else if (view === 'quadro') renderQuadro();
