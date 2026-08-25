@@ -733,47 +733,142 @@ function allPersonalWithOrigin() {
 }
 
 /* ---------------- fitness ---------------- */
-const MUSCLE_GROUPS = ['Peito', 'Costas', 'Ombros', 'Braços', 'Abdômen', 'Pernas', 'Glúteos'];
-function addWorkout(exercicio, series, reps, carga, data, grupo) {
-  STATE.fitness.workouts.push({ id: 'wo' + Date.now() + Math.random().toString(36).slice(2, 6), exercicio, series, reps, carga, data, grupo: grupo || null });
+const MUSCLE_GROUPS = ['Peito', 'Costas', 'Trapézio', 'Ombros', 'Bíceps', 'Tríceps', 'Antebraço', 'Abdômen', 'Quadríceps', 'Posterior de Coxa', 'Glúteos', 'Panturrilha'];
+// Starter exercise → muscle map (PT-BR, lowercase keys). Expand/replace this once a fuller
+// exercise database is provided — everything downstream (avatar, tags, history) reads from it.
+const EXERCISE_MUSCLE_MAP = {
+  'supino reto': { primary: ['Peito'], secondary: ['Tríceps', 'Ombros'] },
+  'supino inclinado': { primary: ['Peito'], secondary: ['Ombros', 'Tríceps'] },
+  'crucifixo': { primary: ['Peito'], secondary: [] },
+  'flexão': { primary: ['Peito'], secondary: ['Tríceps', 'Ombros'] },
+  'remada curvada': { primary: ['Costas'], secondary: ['Bíceps'] },
+  'remada baixa': { primary: ['Costas'], secondary: ['Bíceps'] },
+  'puxada frente': { primary: ['Costas'], secondary: ['Bíceps'] },
+  'barra fixa': { primary: ['Costas'], secondary: ['Bíceps'] },
+  'levantamento terra': { primary: ['Costas', 'Posterior de Coxa'], secondary: ['Glúteos', 'Trapézio'] },
+  'encolhimento': { primary: ['Trapézio'], secondary: [] },
+  'desenvolvimento': { primary: ['Ombros'], secondary: ['Tríceps'] },
+  'elevação lateral': { primary: ['Ombros'], secondary: [] },
+  'elevação frontal': { primary: ['Ombros'], secondary: [] },
+  'rosca direta': { primary: ['Bíceps'], secondary: ['Antebraço'] },
+  'rosca alternada': { primary: ['Bíceps'], secondary: ['Antebraço'] },
+  'rosca martelo': { primary: ['Bíceps', 'Antebraço'], secondary: [] },
+  'tríceps corda': { primary: ['Tríceps'], secondary: [] },
+  'tríceps testa': { primary: ['Tríceps'], secondary: [] },
+  'mergulho': { primary: ['Tríceps'], secondary: ['Peito', 'Ombros'] },
+  'abdominal': { primary: ['Abdômen'], secondary: [] },
+  'prancha': { primary: ['Abdômen'], secondary: [] },
+  'agachamento': { primary: ['Quadríceps'], secondary: ['Glúteos', 'Posterior de Coxa'] },
+  'leg press': { primary: ['Quadríceps'], secondary: ['Glúteos'] },
+  'cadeira extensora': { primary: ['Quadríceps'], secondary: [] },
+  'cadeira flexora': { primary: ['Posterior de Coxa'], secondary: [] },
+  'stiff': { primary: ['Posterior de Coxa'], secondary: ['Glúteos'] },
+  'elevação pélvica': { primary: ['Glúteos'], secondary: ['Posterior de Coxa'] },
+  'panturrilha': { primary: ['Panturrilha'], secondary: [] },
+};
+function lookupExerciseMuscles(nome) { return EXERCISE_MUSCLE_MAP[(nome || '').trim().toLowerCase()] || null; }
+function addWorkout(exercicio, series, reps, carga, data, primary, secondary) {
+  STATE.fitness.workouts.push({ id: 'wo' + Date.now() + Math.random().toString(36).slice(2, 6), exercicio, series, reps, carga, data, primary: primary || [], secondary: secondary || [] });
   saveState();
 }
-function muscleGroupIntensity(grupo) {
-  return Math.min(4, STATE.fitness.workouts.filter(w => w.grupo === grupo && withinPeriod(w.data, 7)).length);
+function workoutMuscles(w) {
+  if (w.primary && w.primary.length) return { primary: w.primary, secondary: w.secondary || [] };
+  if (w.grupo) return { primary: [w.grupo], secondary: [] };
+  return { primary: [], secondary: [] };
+}
+function muscleGroupScore(grupo, period) {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const to = new Date(now); const from = new Date(now);
+  if (period === 'lastWeek') { to.setDate(now.getDate() - 7); from.setDate(now.getDate() - 14); }
+  else { to.setDate(now.getDate() + 1); from.setDate(now.getDate() - 7); }
+  let score = 0;
+  for (const w of STATE.fitness.workouts) {
+    const [y, m, d] = w.data.split('-').map(Number);
+    const wd = new Date(y, m - 1, d);
+    if (wd < from || wd >= to) continue;
+    const { primary, secondary } = workoutMuscles(w);
+    if (primary.includes(grupo)) score += 1;
+    else if (secondary.includes(grupo)) score += 0.5;
+  }
+  return score;
+}
+function muscleGroupLevel(grupo, period) {
+  const s = muscleGroupScore(grupo, period);
+  if (s <= 0) return 0;
+  if (s < 1) return 1;
+  if (s < 2) return 2;
+  if (s < 3.5) return 3;
+  return 4;
+}
+let bodyAvatarPeriod = 'thisWeek';
+function onBodyAvatarPeriod(p) { bodyAvatarPeriod = p; renderFitness(); }
+function weekSwitch(current) {
+  return `<div class="period-switch">
+    <button class="${current === 'thisWeek' ? 'active' : ''}" onclick="onBodyAvatarPeriod('thisWeek')">Esta semana</button>
+    <button class="${current === 'lastWeek' ? 'active' : ''}" onclick="onBodyAvatarPeriod('lastWeek')">Semana passada</button>
+  </div>`;
 }
 function bodyAvatarBlock() {
+  const period = bodyAvatarPeriod;
   const f = (grupo) => {
-    const lvl = muscleGroupIntensity(grupo);
+    const lvl = muscleGroupLevel(grupo, period);
     if (!lvl) return `fill="var(--bg-soft)" stroke="var(--border-soft)" stroke-width="1"`;
     const op = [0.35, 0.55, 0.78, 1][lvl - 1];
     return `fill="var(--mint-text)" opacity="${op}" stroke="var(--border-soft)" stroke-width="1"`;
   };
-  const svg = `<svg width="130" height="210" viewBox="0 0 120 220" style="flex-shrink:0">
-    <rect x="36" y="112" width="20" height="70" rx="8" ${f('Pernas')}/>
-    <rect x="64" y="112" width="20" height="70" rx="8" ${f('Pernas')}/>
-    <rect x="16" y="48" width="15" height="58" rx="7" ${f('Braços')}/>
-    <rect x="89" y="48" width="15" height="58" rx="7" ${f('Braços')}/>
-    <rect x="40" y="78" width="40" height="32" rx="8" ${f('Abdômen')}/>
-    <rect x="36" y="40" width="48" height="38" rx="10" ${f('Peito')}/>
-    <ellipse cx="30" cy="47" rx="15" ry="10" ${f('Ombros')}/>
-    <ellipse cx="90" cy="47" rx="15" ry="10" ${f('Ombros')}/>
-    <circle cx="60" cy="18" r="15" fill="var(--bg-soft)" stroke="var(--border-soft)" stroke-width="1"/>
+  const neutral = `fill="var(--bg-soft)" stroke="var(--border-soft)" stroke-width="1"`;
+  const front = `<svg width="120" height="230" viewBox="0 0 120 240" style="flex-shrink:0">
+    <rect x="40" y="172" width="14" height="50" rx="6" ${neutral}/>
+    <rect x="66" y="172" width="14" height="50" rx="6" ${neutral}/>
+    <rect x="38" y="110" width="18" height="60" rx="8" ${f('Quadríceps')}/>
+    <rect x="64" y="110" width="18" height="60" rx="8" ${f('Quadríceps')}/>
+    <rect x="12" y="82" width="13" height="32" rx="6" ${f('Antebraço')}/>
+    <rect x="95" y="82" width="13" height="32" rx="6" ${f('Antebraço')}/>
+    <rect x="42" y="76" width="36" height="30" rx="8" ${f('Abdômen')}/>
+    <rect x="14" y="46" width="14" height="34" rx="6" ${f('Bíceps')}/>
+    <rect x="92" y="46" width="14" height="34" rx="6" ${f('Bíceps')}/>
+    <rect x="36" y="38" width="48" height="36" rx="10" ${f('Peito')}/>
+    <ellipse cx="28" cy="44" rx="14" ry="10" ${f('Ombros')}/>
+    <ellipse cx="92" cy="44" rx="14" ry="10" ${f('Ombros')}/>
+    <rect x="54" y="28" width="12" height="8" ${neutral}/>
+    <circle cx="60" cy="16" r="14" ${neutral}/>
+  </svg>`;
+  const back = `<svg width="120" height="230" viewBox="0 0 120 240" style="flex-shrink:0">
+    <rect x="40" y="178" width="14" height="44" rx="6" ${f('Panturrilha')}/>
+    <rect x="66" y="178" width="14" height="44" rx="6" ${f('Panturrilha')}/>
+    <rect x="38" y="132" width="18" height="42" rx="8" ${f('Posterior de Coxa')}/>
+    <rect x="64" y="132" width="18" height="42" rx="8" ${f('Posterior de Coxa')}/>
+    <rect x="40" y="104" width="40" height="26" rx="12" ${f('Glúteos')}/>
+    <rect x="12" y="84" width="13" height="32" rx="6" ${f('Antebraço')}/>
+    <rect x="95" y="84" width="13" height="32" rx="6" ${f('Antebraço')}/>
+    <rect x="14" y="50" width="14" height="32" rx="6" ${f('Tríceps')}/>
+    <rect x="92" y="50" width="14" height="32" rx="6" ${f('Tríceps')}/>
+    <rect x="36" y="44" width="48" height="44" rx="10" ${f('Costas')}/>
+    <ellipse cx="28" cy="48" rx="14" ry="10" ${f('Ombros')}/>
+    <ellipse cx="92" cy="48" rx="14" ry="10" ${f('Ombros')}/>
+    <polygon points="44,28 76,28 90,44 30,44" ${f('Trapézio')}/>
+    <rect x="54" y="28" width="12" height="8" ${neutral}/>
+    <circle cx="60" cy="16" r="14" ${neutral}/>
   </svg>`;
   const legend = MUSCLE_GROUPS.map(g => {
-    const lvl = muscleGroupIntensity(g);
+    const lvl = muscleGroupLevel(g, period);
     const op = lvl ? [0.35, 0.55, 0.78, 1][lvl - 1] : 1;
     return `<div style="display:flex;align-items:center;gap:7px;font-size:12px">
       <span style="width:9px;height:9px;border-radius:50%;background:${lvl ? 'var(--mint-text)' : 'var(--text-faint)'};opacity:${op};flex-shrink:0"></span>
       <span style="flex:1">${g}</span>
-      <span style="color:var(--text-muted)">${lvl ? lvl + 'x / 7d' : 'sem treino'}</span>
+      <span style="color:var(--text-muted)">${lvl ? muscleGroupScore(g, period) + 'x' : '—'}</span>
     </div>`;
   }).join('');
   return `<div class="card">
     ${editableTitle('cardAvatarCorpo')}
-    <div class="card-sub">grupos musculares treinados nos últimos 7 dias</div>
-    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:8px">
-      ${svg}
-      <div style="flex:1;min-width:150px;display:flex;flex-direction:column;gap:7px">${legend}</div>
+    <div class="card-sub">grupos musculares treinados · principal conta cheio, secundário conta metade</div>
+    <div style="margin:10px 0">${weekSwitch(period)}</div>
+    <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px">
+        <div style="text-align:center"><div class="r-meta" style="margin-bottom:4px">Frente</div>${front}</div>
+        <div style="text-align:center"><div class="r-meta" style="margin-bottom:4px">Costas</div>${back}</div>
+      </div>
+      <div style="flex:1;min-width:220px;display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">${legend}</div>
     </div>
   </div>`;
 }
@@ -2296,17 +2391,21 @@ function renderFitness() {
     html += `<div class="card">
       ${editableTitle('cardRegistrarTreino')}
       <div class="inline-form">
-        <input type="text" id="wo-exercicio" placeholder="Exercício (ex: Supino)">
-        <select id="wo-grupo" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
-          <option value="">Grupo (opcional)</option>
-          ${MUSCLE_GROUPS.map(g => `<option value="${g}">${g}</option>`).join('')}
-        </select>
+        <input type="text" id="wo-exercicio" placeholder="Exercício (ex: Supino Reto)" oninput="onExercicioInput()" list="wo-exercicio-list">
+        <datalist id="wo-exercicio-list">${Object.keys(EXERCISE_MUSCLE_MAP).map(n => `<option value="${n.charAt(0).toUpperCase() + n.slice(1)}">`).join('')}</datalist>
+        <span id="wo-grupo-row">
+          <select id="wo-grupo" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
+            <option value="">Grupo (opcional)</option>
+            ${MUSCLE_GROUPS.map(g => `<option value="${g}">${g}</option>`).join('')}
+          </select>
+        </span>
         <input type="number" id="wo-series" placeholder="Séries" style="width:80px">
         <input type="number" id="wo-reps" placeholder="Reps" style="width:80px">
         <input type="number" id="wo-carga" placeholder="Carga (kg)" style="width:100px">
         <input type="date" id="wo-data" value="${todayISO()}">
         <button class="btn" onclick="onAddWorkout()">+ Adicionar</button>
       </div>
+      <div id="wo-muscle-preview" class="r-meta" style="display:none;margin-top:-8px;margin-bottom:12px"></div>
     </div>`;
 
     const renderers = {
@@ -2332,8 +2431,10 @@ function renderFitness() {
         const recent = [...STATE.fitness.workouts].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 30);
         if (!recent.length) h += `<div class="empty-note">nenhum treino registrado ainda.</div>`;
         for (const w of recent) {
+          const { primary, secondary } = workoutMuscles(w);
+          const tags = [...primary.map(g => `<span class="pill origin">${g}</span>`), ...secondary.map(g => `<span class="pill normal">${g}</span>`)].join(' ');
           h += `<div class="row-item">
-            <span class="r-text"><b>${w.exercicio}</b>${w.grupo ? ' · ' + w.grupo : ''} — ${w.series}x${w.reps} · ${w.carga}kg</span>
+            <span class="r-text"><b>${w.exercicio}</b> — ${w.series}x${w.reps} · ${w.carga}kg ${tags}</span>
             <span class="r-meta">${w.data}</span>
             <button class="btn ghost" style="padding:3px 8px" onclick="onRemoveWorkout('${w.id}')">✕</button>
           </div>`;
@@ -2392,15 +2493,36 @@ function renderFitness() {
 function onFitnessSub(id) { fitnessSub = id; renderFitness(); }
 function onSelectExercise(name) { fitnessExercise = name; renderFitness(); }
 function onFitnessPeriod(days) { fitnessPeriod = days; renderFitness(); }
+function onExercicioInput() {
+  const el = document.getElementById('wo-exercicio');
+  const preview = document.getElementById('wo-muscle-preview');
+  const grupoRow = document.getElementById('wo-grupo-row');
+  if (!el || !preview || !grupoRow) return;
+  const match = lookupExerciseMuscles(el.value);
+  if (match) {
+    preview.style.display = '';
+    preview.innerHTML = `Atinge: <b>${match.primary.join(', ')}</b>${match.secondary.length ? ' · secundário: ' + match.secondary.join(', ') : ''}`;
+    grupoRow.style.display = 'none';
+  } else {
+    preview.style.display = 'none';
+    grupoRow.style.display = '';
+  }
+}
 function onAddWorkout() {
   const exercicio = document.getElementById('wo-exercicio').value.trim();
-  const grupo = document.getElementById('wo-grupo').value;
   const series = parseFloat(document.getElementById('wo-series').value);
   const reps = parseFloat(document.getElementById('wo-reps').value);
   const carga = parseFloat(document.getElementById('wo-carga').value);
   const data = document.getElementById('wo-data').value || todayISO();
   if (!exercicio || isNaN(carga)) return;
-  addWorkout(exercicio, isNaN(series) ? null : series, isNaN(reps) ? null : reps, carga, data, grupo);
+  const match = lookupExerciseMuscles(exercicio);
+  let primary = [], secondary = [];
+  if (match) { primary = match.primary; secondary = match.secondary; }
+  else {
+    const grupo = document.getElementById('wo-grupo').value;
+    if (grupo) primary = [grupo];
+  }
+  addWorkout(exercicio, isNaN(series) ? null : series, isNaN(reps) ? null : reps, carga, data, primary, secondary);
   fitnessExercise = exercicio;
   renderFitness();
   renderSidebar();
