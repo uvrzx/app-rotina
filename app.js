@@ -324,6 +324,9 @@ const DEFAULT_UI_LABELS = {
   cardContasPagar: 'Contas a Pagar',
   cardOrcamento: 'Orçamento por Categoria',
   cardAvatarCorpo: 'Avatar do Corpo',
+  cardVolumeSemanal: 'Volume Semanal',
+  cardPlanoSemana: 'Plano da Semana',
+  cardBibliotecaExercicios: 'Biblioteca de Exercícios',
 };
 
 /* ---------------- draggable block system ---------------- */
@@ -331,7 +334,7 @@ const BLOCK_CATALOG = {
   hoje: { progresso: 'Progresso do Dia', jogosHoje: 'Jogos de Hoje', prazosHoje: 'Prazos de Hoje', timeline: 'Timeline de Hoje', habitosRapidos: 'Hábitos Rápidos' },
   rotina: { gradeSemanal: 'Grade Semanal', habitos: 'Hábitos' },
   'financas.overview': { saldoTotal: 'Saldo Total', receitasMes: 'Receitas do Mês', despesasMes: 'Despesas do Mês', economiaMes: 'Economia do Mês', gastosCategoria: 'Gastos por Categoria', evolucaoSaldo: 'Evolução do Saldo', historicoTransacoes: 'Histórico de Transações' },
-  'fitness.treinos': { avatarCorpo: 'Avatar do Corpo', progressoCarga: 'Progresso de Carga', historicoTreino: 'Histórico de Treinos' },
+  'fitness.treinos': { avatarCorpo: 'Avatar do Corpo', volumeSemanal: 'Volume Semanal', planoSemana: 'Plano da Semana', progressoCarga: 'Progresso de Carga', historicoTreino: 'Histórico de Treinos', bibliotecaExercicios: 'Biblioteca de Exercícios' },
   'fitness.medidas': { evolucaoPeso: 'Evolução do Peso', historicoMedidas: 'Histórico de Medidas' },
 };
 function defaultBlockLayout() {
@@ -343,7 +346,7 @@ const BLOCK_WIDE = {
   hoje: ['timeline', 'habitosRapidos'],
   rotina: ['gradeSemanal', 'habitos'],
   'financas.overview': ['gastosCategoria', 'evolucaoSaldo', 'historicoTransacoes'],
-  'fitness.treinos': ['avatarCorpo', 'progressoCarga', 'historicoTreino'],
+  'fitness.treinos': ['avatarCorpo', 'volumeSemanal', 'planoSemana', 'progressoCarga', 'historicoTreino', 'bibliotecaExercicios'],
   'fitness.medidas': ['evolucaoPeso', 'historicoMedidas'],
 };
 function blockWrap(ctxKey, blockId, innerHtml) {
@@ -733,40 +736,39 @@ function allPersonalWithOrigin() {
 }
 
 /* ---------------- fitness ---------------- */
-const MUSCLE_GROUPS = ['Peito', 'Costas', 'Trapézio', 'Ombros', 'Bíceps', 'Tríceps', 'Antebraço', 'Abdômen', 'Quadríceps', 'Posterior de Coxa', 'Glúteos', 'Panturrilha'];
-// Starter exercise → muscle map (PT-BR, lowercase keys). Expand/replace this once a fuller
-// exercise database is provided — everything downstream (avatar, tags, history) reads from it.
-const EXERCISE_MUSCLE_MAP = {
-  'supino reto': { primary: ['Peito'], secondary: ['Tríceps', 'Ombros'] },
-  'supino inclinado': { primary: ['Peito'], secondary: ['Ombros', 'Tríceps'] },
-  'crucifixo': { primary: ['Peito'], secondary: [] },
-  'flexão': { primary: ['Peito'], secondary: ['Tríceps', 'Ombros'] },
-  'remada curvada': { primary: ['Costas'], secondary: ['Bíceps'] },
-  'remada baixa': { primary: ['Costas'], secondary: ['Bíceps'] },
-  'puxada frente': { primary: ['Costas'], secondary: ['Bíceps'] },
-  'barra fixa': { primary: ['Costas'], secondary: ['Bíceps'] },
-  'levantamento terra': { primary: ['Costas', 'Posterior de Coxa'], secondary: ['Glúteos', 'Trapézio'] },
-  'encolhimento': { primary: ['Trapézio'], secondary: [] },
-  'desenvolvimento': { primary: ['Ombros'], secondary: ['Tríceps'] },
-  'elevação lateral': { primary: ['Ombros'], secondary: [] },
-  'elevação frontal': { primary: ['Ombros'], secondary: [] },
-  'rosca direta': { primary: ['Bíceps'], secondary: ['Antebraço'] },
-  'rosca alternada': { primary: ['Bíceps'], secondary: ['Antebraço'] },
-  'rosca martelo': { primary: ['Bíceps', 'Antebraço'], secondary: [] },
-  'tríceps corda': { primary: ['Tríceps'], secondary: [] },
-  'tríceps testa': { primary: ['Tríceps'], secondary: [] },
-  'mergulho': { primary: ['Tríceps'], secondary: ['Peito', 'Ombros'] },
-  'abdominal': { primary: ['Abdômen'], secondary: [] },
-  'prancha': { primary: ['Abdômen'], secondary: [] },
-  'agachamento': { primary: ['Quadríceps'], secondary: ['Glúteos', 'Posterior de Coxa'] },
-  'leg press': { primary: ['Quadríceps'], secondary: ['Glúteos'] },
-  'cadeira extensora': { primary: ['Quadríceps'], secondary: [] },
-  'cadeira flexora': { primary: ['Posterior de Coxa'], secondary: [] },
-  'stiff': { primary: ['Posterior de Coxa'], secondary: ['Glúteos'] },
-  'elevação pélvica': { primary: ['Glúteos'], secondary: ['Posterior de Coxa'] },
-  'panturrilha': { primary: ['Panturrilha'], secondary: [] },
+const MUSCLE_GROUPS = ['Peito', 'Costas', 'Trapézio', 'Ombros', 'Bíceps', 'Tríceps', 'Antebraço', 'Abdômen', 'Oblíquos', 'Lombar', 'Quadríceps', 'Posterior de Coxa', 'Adutores/Abdutores', 'Glúteos', 'Panturrilha'];
+// Banco de exercícios de calistenia (casa) — vôlei qua/dom + futsal sex.
+// primary/secondary alimentam o avatar e as tags do histórico; seriesReps é a dose sugerida
+// para hipertrofia moderada (RIR 1-2) sem competir com a recuperação exigida pelos jogos.
+const EXERCISE_DB = {
+  'flexão de braço': { primary: ['Peito'], secondary: ['Tríceps', 'Ombros', 'Abdômen'], categoria: 'empurrar_horizontal', seriesReps: '3-4x10-15, descanso 60-90s', efeito: 'Adução horizontal do ombro; tensão mecânica alta na fase excêntrica controlada.', variacoes: ['Inclinada (iniciante)', 'Padrão (intermediário)', 'Declinada', 'Diamante (foco tríceps)', 'Arqueira (unilateral)', 'Pseudo planche', 'Com palmas (explosiva)'] },
+  'pike push-up': { primary: ['Ombros'], secondary: ['Tríceps', 'Abdômen'], categoria: 'empurrar_vertical', seriesReps: '3x8-12, descanso 75s', efeito: 'Simula press militar vertical; recruta deltoide anterior/lateral e estabilizadores de escápula.', variacoes: ['No chão (iniciante)', 'Pés elevados em cadeira', 'HSPU assistido na parede', 'HSPU completo'] },
+  'elevação lateral': { primary: ['Ombros'], secondary: [], categoria: 'isolamento', seriesReps: '3x12-15, descanso 60s', efeito: 'Isola deltoide lateral; estabilidade do manguito rotador em movimentos aéreos (saque, cortada).', variacoes: ['Sem carga + isometria', 'Com mochila/garrafas', 'Unilateral com pausa'] },
+  'mergulho': { primary: ['Tríceps'], secondary: ['Peito', 'Ombros'], categoria: 'empurrar', seriesReps: '3x8-12, descanso 75s', efeito: 'Extensão de cotovelo sob carga corporal; forte construtor de tríceps e peitoral inferior.', variacoes: ['Pernas flexionadas no chão', 'Pernas estendidas', 'Pés elevados', 'Unilateral'] },
+  'remada invertida': { primary: ['Costas'], secondary: ['Bíceps', 'Antebraço'], categoria: 'puxar_horizontal', seriesReps: '3-4x10-15, descanso 75s', efeito: 'Contrabalança o volume de empurrar; ativa latíssimo, romboides e trapézio médio.', variacoes: ['Corpo vertical (mesa)', 'Corpo em 45°', 'Pés elevados (horizontal)', 'Unilateral'] },
+  'barra fixa': { primary: ['Costas'], secondary: ['Bíceps', 'Antebraço'], categoria: 'puxar_vertical', seriesReps: '3-4x5-10 (ou negativas 4-6s)', efeito: 'Padrão de puxada vertical mais completo para latíssimo. Sem barra, substituir por remada invertida.', variacoes: ['Negativa', 'Chin-up (supinada)', 'Pull-up (pronada)', 'Archer pull-up', 'Muscle-up'] },
+  'superman': { primary: ['Lombar'], secondary: ['Glúteos'], categoria: 'extensao', seriesReps: '3x12-15 ou 20-30s, descanso 45s', efeito: 'Fortalece eretores da espinha, protegendo a lombar em saltos e mudanças de direção.', variacoes: ['Estático', 'Dinâmico', 'Alternado (braço/perna opostos)'] },
+  'prancha': { primary: ['Abdômen'], secondary: ['Lombar', 'Ombros'], categoria: 'core_isometrico', seriesReps: '3x30-60s, descanso 45s', efeito: 'Estabilização anti-extensão; transfere força entre pernas e braços em saltos e chutes.', variacoes: ['Joelho apoiado', 'Padrão', 'Shoulder tap', 'Elevação de perna alternada', 'RKC plank'] },
+  'prancha lateral': { primary: ['Oblíquos'], secondary: ['Adutores/Abdutores'], categoria: 'core_isometrico', seriesReps: '3x20-40s cada lado, descanso 30s', efeito: 'Oblíquos e quadrado lombar estabilizam o tronco em movimentos laterais rápidos do futsal.', variacoes: ['Joelho apoiado', 'Padrão', 'Com elevação de perna', 'Com rotação'] },
+  'elevação de pernas': { primary: ['Abdômen'], secondary: [], categoria: 'core_dinamico', seriesReps: '3x12-20, descanso 45s', efeito: 'Flexão de quadril sob resistência das pernas; trabalha o reto abdominal inferior.', variacoes: ['Joelhos deitado', 'Pernas estendidas', 'V-up completo', 'Dragon flag'] },
+  'agachamento': { primary: ['Quadríceps', 'Glúteos'], secondary: ['Posterior de Coxa'], categoria: 'empurrar_inferior', seriesReps: '3-4x15-20, descanso 60-75s (volume moderado — pernas já recebem carga do vôlei/futsal)', efeito: 'Padrão fundamental de flexão de joelho/quadril; base para potência de salto.', variacoes: ['Livre', 'Sumo (foco adutor/glúteo)', 'Búlgaro (unilateral)', 'Pistol (assistido)'] },
+  'afundo': { primary: ['Quadríceps', 'Glúteos'], secondary: ['Posterior de Coxa', 'Adutores/Abdutores'], categoria: 'unilateral', seriesReps: '3x10-12 cada perna, descanso 60s', efeito: 'Trabalho unilateral corrige assimetrias entre pernas, comuns em quem chuta de um lado.', variacoes: ['Estático', 'Caminhando', 'Reverso', 'Lateral', 'Curtsy'] },
+  'elevação de quadril': { primary: ['Glúteos'], secondary: ['Posterior de Coxa'], categoria: 'extensao_quadril', seriesReps: '3x12-15 cada perna, descanso 60s', efeito: 'Isola extensão de quadril, ligada diretamente à impulsão vertical do vôlei.', variacoes: ['Bipodal', 'Unilateral', 'Unilateral com pausa'] },
+  'ponte de glúteo/isquio deslizante': { primary: ['Posterior de Coxa'], secondary: ['Glúteos'], categoria: 'flexao_joelho', seriesReps: '3x8-12, descanso 75s', efeito: 'Isquiotibiais raramente trabalhados no treino de peso corporal; reduz risco de lesão em sprints.', variacoes: ['Ponte com pés apoiados', 'Deslizando com toalha', 'Nordic curl assistido'] },
+  'elevação de panturrilha': { primary: ['Panturrilha'], secondary: [], categoria: 'isolamento', seriesReps: '3-4x15-20, descanso 45s', efeito: 'Absorve impacto de aterrissagem; reduz risco de tendinite patelar e de Aquiles.', variacoes: ['Bipodal no chão', 'Bipodal em degrau', 'Unilateral em degrau'] },
+  'cossack squat': { primary: ['Adutores/Abdutores', 'Quadríceps'], secondary: ['Glúteos'], categoria: 'lateral', seriesReps: '3x8-10 cada lado, descanso 60s', efeito: 'Mobilidade e força em plano frontal — essencial para deslocamento lateral e defesa.', variacoes: ['Amplitude parcial', 'Amplitude completa', 'Com pausa embaixo'] },
+  'jump squat': { primary: ['Quadríceps', 'Glúteos'], secondary: [], categoria: 'pliometria', seriesReps: '3-4x6-8 (qualidade > quantidade), descanso 2min', efeito: 'Ciclo alongamento-encurtamento do quadríceps/glúteo; transfere para bloqueio/ataque no vôlei.' },
+  'salto em caixote': { primary: ['Quadríceps', 'Glúteos'], secondary: [], categoria: 'pliometria', seriesReps: '3-4x5-6, descanso 2min', efeito: 'Potência concêntrica pura, mais seguro para começar pliometria em casa.' },
+  'salto lateral': { primary: ['Adutores/Abdutores', 'Glúteos'], secondary: ['Quadríceps'], categoria: 'pliometria', seriesReps: '3x6-8 cada lado, descanso 90s', efeito: 'Potência em plano frontal — transferência direta para cortes de direção no futsal.' },
+  'burpee': { primary: ['Peito', 'Quadríceps'], secondary: ['Ombros', 'Abdômen'], categoria: 'pliometria', seriesReps: '3x8-12, descanso 60-90s', efeito: 'Combina força, explosão e condicionamento — usar com moderação (compete com CNS).' },
+  'salto vertical': { primary: ['Quadríceps', 'Glúteos'], secondary: ['Panturrilha'], categoria: 'pliometria', seriesReps: '3-5x3-5 saltos máximos, descanso 2-3min', efeito: 'Padrão-ouro de potência de perna; poucas reps de máxima qualidade > muitas cansadas.' },
+  'salto em distância': { primary: ['Glúteos', 'Posterior de Coxa'], secondary: ['Quadríceps'], categoria: 'pliometria', seriesReps: '3x4-6, descanso 90s', efeito: 'Potência horizontal, ativa cadeia posterior de forma explosiva.' },
+  'tuck jump': { primary: ['Quadríceps', 'Abdômen'], secondary: ['Glúteos'], categoria: 'pliometria', seriesReps: '3x6-8, descanso 90s', efeito: 'Alta demanda de flexão de quadril explosiva e controle de aterrissagem.' },
+  'flexão com palmas': { primary: ['Peito'], secondary: ['Tríceps', 'Ombros'], categoria: 'pliometria', seriesReps: '3x4-6, descanso 90s', efeito: 'Versão de trem superior da pliometria; útil para cortadas e saques mais fortes.' },
+  'nordic hamstring (prevenção)': { primary: ['Posterior de Coxa'], secondary: [], categoria: 'prehab', seriesReps: '1-2x/semana, até 3x6-10', efeito: 'Reduz risco de lesão de isquiotibiais em sprints do futsal.' },
+  'copenhagen adduction (prevenção)': { primary: ['Adutores/Abdutores'], secondary: [], categoria: 'prehab', seriesReps: '1-2x/semana, progressão até 3x15', efeito: 'Reduz problemas de virilha ligados a sprint e mudança de direção.' },
 };
-function lookupExerciseMuscles(nome) { return EXERCISE_MUSCLE_MAP[(nome || '').trim().toLowerCase()] || null; }
+function lookupExerciseMuscles(nome) { return EXERCISE_DB[(nome || '').trim().toLowerCase()] || null; }
 function addWorkout(exercicio, series, reps, carga, data, primary, secondary) {
   STATE.fitness.workouts.push({ id: 'wo' + Date.now() + Math.random().toString(36).slice(2, 6), exercicio, series, reps, carga, data, primary: primary || [], secondary: secondary || [] });
   saveState();
@@ -822,9 +824,12 @@ function bodyAvatarBlock() {
     <rect x="66" y="172" width="14" height="50" rx="6" ${neutral}/>
     <rect x="38" y="110" width="18" height="60" rx="8" ${f('Quadríceps')}/>
     <rect x="64" y="110" width="18" height="60" rx="8" ${f('Quadríceps')}/>
+    <rect x="53" y="114" width="14" height="48" rx="5" ${f('Adutores/Abdutores')}/>
     <rect x="12" y="82" width="13" height="32" rx="6" ${f('Antebraço')}/>
     <rect x="95" y="82" width="13" height="32" rx="6" ${f('Antebraço')}/>
     <rect x="42" y="76" width="36" height="30" rx="8" ${f('Abdômen')}/>
+    <rect x="35" y="78" width="7" height="26" rx="3" ${f('Oblíquos')}/>
+    <rect x="78" y="78" width="7" height="26" rx="3" ${f('Oblíquos')}/>
     <rect x="14" y="46" width="14" height="34" rx="6" ${f('Bíceps')}/>
     <rect x="92" y="46" width="14" height="34" rx="6" ${f('Bíceps')}/>
     <rect x="36" y="38" width="48" height="36" rx="10" ${f('Peito')}/>
@@ -839,6 +844,7 @@ function bodyAvatarBlock() {
     <rect x="38" y="132" width="18" height="42" rx="8" ${f('Posterior de Coxa')}/>
     <rect x="64" y="132" width="18" height="42" rx="8" ${f('Posterior de Coxa')}/>
     <rect x="40" y="104" width="40" height="26" rx="12" ${f('Glúteos')}/>
+    <rect x="40" y="88" width="40" height="18" rx="6" ${f('Lombar')}/>
     <rect x="12" y="84" width="13" height="32" rx="6" ${f('Antebraço')}/>
     <rect x="95" y="84" width="13" height="32" rx="6" ${f('Antebraço')}/>
     <rect x="14" y="50" width="14" height="32" rx="6" ${f('Tríceps')}/>
@@ -868,8 +874,101 @@ function bodyAvatarBlock() {
         <div style="text-align:center"><div class="r-meta" style="margin-bottom:4px">Frente</div>${front}</div>
         <div style="text-align:center"><div class="r-meta" style="margin-bottom:4px">Costas</div>${back}</div>
       </div>
-      <div style="flex:1;min-width:220px;display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">${legend}</div>
+      <div style="flex:1;min-width:280px;display:grid;grid-template-columns:1fr 1fr;gap:6px 16px">${legend}</div>
     </div>
+  </div>`;
+}
+function isoWeekBounds(dateISO) {
+  const [y, m, d] = dateISO.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const dow = date.getDay();
+  const monday = new Date(date); monday.setDate(date.getDate() + (dow === 0 ? -6 : 1 - dow));
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  return { from: monday, to: sunday };
+}
+const VOLUME_TARGET = 10; // séries/músculo/semana (Schoenfeld, Ogborn & Krieger 2017) para hipertrofia moderada
+function weeklyVolume(grupo) {
+  const { from, to } = isoWeekBounds(todayISO());
+  let sets = 0;
+  for (const w of STATE.fitness.workouts) {
+    const [y, m, d] = w.data.split('-').map(Number);
+    const wd = new Date(y, m - 1, d);
+    if (wd < from || wd > to) continue;
+    const { primary, secondary } = workoutMuscles(w);
+    const s = w.series || 0;
+    if (primary.includes(grupo)) sets += s;
+    else if (secondary.includes(grupo)) sets += s * 0.5;
+  }
+  return Math.round(sets * 10) / 10;
+}
+function volumeStatus(sets) {
+  if (sets <= 0) return { label: 'sem estímulo', color: 'var(--text-faint)' };
+  if (sets < VOLUME_TARGET * 0.7) return { label: 'abaixo', color: 'var(--amber-text)' };
+  if (sets <= VOLUME_TARGET * 1.4) return { label: 'ideal', color: 'var(--mint-text)' };
+  return { label: 'acima', color: 'var(--red-text)' };
+}
+function weeklyVolumeBlock() {
+  const rows = MUSCLE_GROUPS.map(g => {
+    const sets = weeklyVolume(g);
+    const status = volumeStatus(sets);
+    const pct = Math.min(100, Math.round((sets / VOLUME_TARGET) * 100));
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span>${g}</span>
+        <span style="color:${status.color};font-weight:600">${sets}/${VOLUME_TARGET} séries · ${status.label}</span>
+      </div>
+      <div style="height:6px;background:var(--bg-soft);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${status.color}"></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="card">
+    ${editableTitle('cardVolumeSemanal')}
+    <div class="card-sub">meta ~${VOLUME_TARGET} séries/músculo/semana (RIR 1-2) — o bastante para crescer sem competir com a recuperação do vôlei/futsal</div>
+    <div style="margin-top:10px">${rows}</div>
+  </div>`;
+}
+const WEEKLY_PLAN = [
+  { dow: 1, label: 'Segunda', foco: 'Push A — peito/ombro/tríceps + core (volume moderado)' },
+  { dow: 2, label: 'Terça', foco: 'Pull A — costas/bíceps + lombar + mobilidade de ombro/quadril' },
+  { dow: 3, label: 'Quarta', foco: 'Mobilidade leve + Vôlei à noite (sem treino de força pesado)' },
+  { dow: 4, label: 'Quinta', foco: 'Pernas + explosão/pliometria moderada' },
+  { dow: 5, label: 'Sexta', foco: 'Ativação leve (mobilidade + saltos submáximos) + Futsal à noite' },
+  { dow: 6, label: 'Sábado', foco: 'Full body leve (push+pull+core, volume reduzido) + flexibilidade' },
+  { dow: 0, label: 'Domingo', foco: 'Descanso ativo/mobilidade + Vôlei à noite' },
+];
+function weeklyPlanBlock() {
+  const todayDow = new Date().getDay();
+  const todayBlocks = blocksForDate(todayISO());
+  const gameToday = todayBlocks.find(b => b.tag === 'volei' || b.tag === 'futsal');
+  const rows = WEEKLY_PLAN.map(d => `<div class="row-item" style="${d.dow === todayDow ? 'background:var(--mint-bg);margin:0 -10px;padding:10px 14px;border-radius:var(--radius-md);border-bottom:none' : ''}">
+    <span class="r-time" style="min-width:70px">${d.label}</span>
+    <span class="r-text">${d.foco}</span>
+  </div>`).join('');
+  return `<div class="card">
+    ${editableTitle('cardPlanoSemana')}
+    <div class="card-sub">baseado no seu vôlei (qua/dom) e futsal (sex) — força pesada de perna fica longe dos jogos</div>
+    ${gameToday ? `<div class="alert-item" style="margin-top:8px">${svgIcon('alert', 15)}<span>Hoje tem <b>${tagLabel(gameToday.tag)}</b> à noite — evite treino pesado de pernas/explosão hoje.</span></div>` : ''}
+    <div class="row-list" style="margin-top:10px">${rows}</div>
+  </div>`;
+}
+function exerciseLibraryBlock() {
+  const rows = Object.entries(EXERCISE_DB).map(([nome, ex]) => {
+    const tags = [...ex.primary.map(g => `<span class="pill origin">${g}</span>`), ...ex.secondary.map(g => `<span class="pill normal">${g}</span>`)].join(' ');
+    return `<div class="row-item" style="flex-direction:column;align-items:stretch;gap:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <b style="text-transform:capitalize">${nome}</b>
+        <span class="r-meta">${ex.seriesReps || ''}</span>
+      </div>
+      <div>${tags}</div>
+      ${ex.efeito ? `<div class="r-meta">${ex.efeito}</div>` : ''}
+      ${ex.variacoes ? `<div class="r-meta">Progressão: ${ex.variacoes.join(' → ')}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="card">
+    ${editableTitle('cardBibliotecaExercicios')}
+    <div class="card-sub">banco de calistenia · progressões, músculos e dose sugerida</div>
+    <div class="row-list" style="margin-top:8px">${rows}</div>
   </div>`;
 }
 function removeWorkout(id) {
@@ -2392,7 +2491,7 @@ function renderFitness() {
       ${editableTitle('cardRegistrarTreino')}
       <div class="inline-form">
         <input type="text" id="wo-exercicio" placeholder="Exercício (ex: Supino Reto)" oninput="onExercicioInput()" list="wo-exercicio-list">
-        <datalist id="wo-exercicio-list">${Object.keys(EXERCISE_MUSCLE_MAP).map(n => `<option value="${n.charAt(0).toUpperCase() + n.slice(1)}">`).join('')}</datalist>
+        <datalist id="wo-exercicio-list">${Object.keys(EXERCISE_DB).map(n => `<option value="${n.charAt(0).toUpperCase() + n.slice(1)}">`).join('')}</datalist>
         <span id="wo-grupo-row">
           <select id="wo-grupo" style="font-size:12.5px;border:1px solid var(--border);background:var(--bg-soft);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text)">
             <option value="">Grupo (opcional)</option>
@@ -2410,6 +2509,9 @@ function renderFitness() {
 
     const renderers = {
       avatarCorpo: () => bodyAvatarBlock(),
+      volumeSemanal: () => weeklyVolumeBlock(),
+      planoSemana: () => weeklyPlanBlock(),
+      bibliotecaExercicios: () => exerciseLibraryBlock(),
       progressoCarga: () => {
         let h = `<div class="card">${editableTitle('cardProgressoCarga')}`;
         if (!exercises.length) {
@@ -2501,7 +2603,7 @@ function onExercicioInput() {
   const match = lookupExerciseMuscles(el.value);
   if (match) {
     preview.style.display = '';
-    preview.innerHTML = `Atinge: <b>${match.primary.join(', ')}</b>${match.secondary.length ? ' · secundário: ' + match.secondary.join(', ') : ''}`;
+    preview.innerHTML = `Atinge: <b>${match.primary.join(', ')}</b>${match.secondary.length ? ' · secundário: ' + match.secondary.join(', ') : ''}${match.seriesReps ? ' · sugestão: ' + match.seriesReps : ''}`;
     grupoRow.style.display = 'none';
   } else {
     preview.style.display = 'none';
