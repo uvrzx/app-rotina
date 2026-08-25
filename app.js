@@ -810,6 +810,17 @@ function weekSwitch(current) {
     <button class="${current === 'lastWeek' ? 'active' : ''}" onclick="onBodyAvatarPeriod('lastWeek')">Semana passada</button>
   </div>`;
 }
+function capsulePath(x1, y1, r1, x2, y2, r2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const p1a = { x: x1 + nx * r1, y: y1 + ny * r1 };
+  const p1b = { x: x1 - nx * r1, y: y1 - ny * r1 };
+  const p2a = { x: x2 + nx * r2, y: y2 + ny * r2 };
+  const p2b = { x: x2 - nx * r2, y: y2 - ny * r2 };
+  const f1 = n => n.toFixed(1);
+  return `M ${f1(p1a.x)},${f1(p1a.y)} L ${f1(p2a.x)},${f1(p2a.y)} A ${r2},${r2} 0 1 1 ${f1(p2b.x)},${f1(p2b.y)} L ${f1(p1b.x)},${f1(p1b.y)} A ${r1},${r1} 0 1 1 ${f1(p1a.x)},${f1(p1a.y)} Z`;
+}
 function bodyAvatarBlock() {
   const period = bodyAvatarPeriod;
   const f = (grupo) => {
@@ -819,42 +830,46 @@ function bodyAvatarBlock() {
     return `fill="var(--mint-text)" opacity="${op}" stroke="var(--border-soft)" stroke-width="1"`;
   };
   const neutral = `fill="var(--bg-soft)" stroke="var(--border-soft)" stroke-width="1"`;
-  const front = `<svg width="120" height="230" viewBox="0 0 120 240" style="flex-shrink:0">
-    <rect x="40" y="172" width="14" height="50" rx="6" ${neutral}/>
-    <rect x="66" y="172" width="14" height="50" rx="6" ${neutral}/>
-    <rect x="38" y="110" width="18" height="60" rx="8" ${f('Quadríceps')}/>
-    <rect x="64" y="110" width="18" height="60" rx="8" ${f('Quadríceps')}/>
-    <rect x="53" y="114" width="14" height="48" rx="5" ${f('Adutores/Abdutores')}/>
-    <rect x="12" y="82" width="13" height="32" rx="6" ${f('Antebraço')}/>
-    <rect x="95" y="82" width="13" height="32" rx="6" ${f('Antebraço')}/>
-    <rect x="42" y="76" width="36" height="30" rx="8" ${f('Abdômen')}/>
-    <rect x="35" y="78" width="7" height="26" rx="3" ${f('Oblíquos')}/>
-    <rect x="78" y="78" width="7" height="26" rx="3" ${f('Oblíquos')}/>
-    <rect x="14" y="46" width="14" height="34" rx="6" ${f('Bíceps')}/>
-    <rect x="92" y="46" width="14" height="34" rx="6" ${f('Bíceps')}/>
-    <rect x="36" y="38" width="48" height="36" rx="10" ${f('Peito')}/>
-    <ellipse cx="28" cy="44" rx="14" ry="10" ${f('Ombros')}/>
-    <ellipse cx="92" cy="44" rx="14" ry="10" ${f('Ombros')}/>
-    <rect x="54" y="28" width="12" height="8" ${neutral}/>
-    <circle cx="60" cy="16" r="14" ${neutral}/>
+  const cap = (x1, y1, r1, x2, y2, r2, attrs) => `<path d="${capsulePath(x1, y1, r1, x2, y2, r2)}" ${attrs}/>`;
+  const front = `<svg width="120" height="240" viewBox="0 0 130 250" style="flex-shrink:0">
+    ${cap(48, 178, 8, 48, 214, 6, neutral)}
+    ${cap(82, 178, 8, 82, 214, 6, neutral)}
+    ${cap(48, 116, 12, 48, 176, 9, f('Quadríceps'))}
+    ${cap(82, 116, 12, 82, 176, 9, f('Quadríceps'))}
+    ${cap(65, 120, 8, 65, 170, 5, f('Adutores/Abdutores'))}
+    ${cap(16, 84, 8, 16, 118, 6, f('Antebraço'))}
+    ${cap(114, 84, 8, 114, 118, 6, f('Antebraço'))}
+    <rect x="46" y="74" width="38" height="36" rx="9" ${f('Abdômen')}/>
+    <path d="M65,76 L65,108" stroke="var(--border-soft)" stroke-width="1" fill="none"/>
+    <path d="M50,86 L80,86" stroke="var(--border-soft)" stroke-width="1" fill="none"/>
+    <path d="M50,98 L80,98" stroke="var(--border-soft)" stroke-width="1" fill="none"/>
+    ${cap(38, 78, 6, 38, 104, 4, f('Oblíquos'))}
+    ${cap(92, 78, 6, 92, 104, 4, f('Oblíquos'))}
+    ${cap(16, 48, 10, 16, 84, 7, f('Bíceps'))}
+    ${cap(114, 48, 10, 114, 84, 7, f('Bíceps'))}
+    <path d="M34,42 C34,30 96,30 96,42 C101,54 95,70 65,74 C35,70 29,54 34,42 Z" ${f('Peito')}/>
+    <ellipse cx="27" cy="43" rx="13" ry="11" ${f('Ombros')}/>
+    <ellipse cx="103" cy="43" rx="13" ry="11" ${f('Ombros')}/>
+    <rect x="59" y="30" width="12" height="9" ${neutral}/>
+    <circle cx="65" cy="17" r="15" ${neutral}/>
   </svg>`;
-  const back = `<svg width="120" height="230" viewBox="0 0 120 240" style="flex-shrink:0">
-    <rect x="40" y="178" width="14" height="44" rx="6" ${f('Panturrilha')}/>
-    <rect x="66" y="178" width="14" height="44" rx="6" ${f('Panturrilha')}/>
-    <rect x="38" y="132" width="18" height="42" rx="8" ${f('Posterior de Coxa')}/>
-    <rect x="64" y="132" width="18" height="42" rx="8" ${f('Posterior de Coxa')}/>
-    <rect x="40" y="104" width="40" height="26" rx="12" ${f('Glúteos')}/>
-    <rect x="40" y="88" width="40" height="18" rx="6" ${f('Lombar')}/>
-    <rect x="12" y="84" width="13" height="32" rx="6" ${f('Antebraço')}/>
-    <rect x="95" y="84" width="13" height="32" rx="6" ${f('Antebraço')}/>
-    <rect x="14" y="50" width="14" height="32" rx="6" ${f('Tríceps')}/>
-    <rect x="92" y="50" width="14" height="32" rx="6" ${f('Tríceps')}/>
-    <rect x="36" y="44" width="48" height="44" rx="10" ${f('Costas')}/>
-    <ellipse cx="28" cy="48" rx="14" ry="10" ${f('Ombros')}/>
-    <ellipse cx="92" cy="48" rx="14" ry="10" ${f('Ombros')}/>
-    <polygon points="44,28 76,28 90,44 30,44" ${f('Trapézio')}/>
-    <rect x="54" y="28" width="12" height="8" ${neutral}/>
-    <circle cx="60" cy="16" r="14" ${neutral}/>
+  const back = `<svg width="120" height="240" viewBox="0 0 130 250" style="flex-shrink:0">
+    ${cap(48, 186, 7, 48, 218, 6, f('Panturrilha'))}
+    ${cap(82, 186, 7, 82, 218, 6, f('Panturrilha'))}
+    ${cap(48, 122, 11, 48, 180, 8, f('Posterior de Coxa'))}
+    ${cap(82, 122, 11, 82, 180, 8, f('Posterior de Coxa'))}
+    <ellipse cx="65" cy="110" rx="24" ry="15" ${f('Glúteos')}/>
+    <rect x="46" y="88" width="38" height="18" rx="7" ${f('Lombar')}/>
+    ${cap(16, 86, 8, 16, 120, 6, f('Antebraço'))}
+    ${cap(114, 86, 8, 114, 120, 6, f('Antebraço'))}
+    ${cap(16, 50, 10, 16, 84, 7, f('Tríceps'))}
+    ${cap(114, 50, 10, 114, 84, 7, f('Tríceps'))}
+    <path d="M34,44 L96,44 C99,58 92,76 65,86 C38,76 31,58 34,44 Z" ${f('Costas')}/>
+    <ellipse cx="27" cy="46" rx="13" ry="11" ${f('Ombros')}/>
+    <ellipse cx="103" cy="46" rx="13" ry="11" ${f('Ombros')}/>
+    <path d="M48,30 L82,30 L94,44 L36,44 Z" ${f('Trapézio')}/>
+    <rect x="59" y="30" width="12" height="9" ${neutral}/>
+    <circle cx="65" cy="17" r="15" ${neutral}/>
   </svg>`;
   const legend = MUSCLE_GROUPS.map(g => {
     const lvl = muscleGroupLevel(g, period);
