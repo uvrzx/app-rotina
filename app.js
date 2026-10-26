@@ -435,6 +435,45 @@ function initBlockDrag() {
     e.preventDefault();
   });
 }
+function initKanbanDrag() {
+  let dragCard = null;
+  function clearDragOver() { document.querySelectorAll('.col-body.drag-over').forEach(c => c.classList.remove('drag-over')); }
+  function colAt(x, y) {
+    const el = document.elementFromPoint(x, y);
+    return el ? el.closest('.col-body') : null;
+  }
+  function onPointerMove(e) {
+    if (!dragCard) return;
+    clearDragOver();
+    const col = colAt(e.clientX, e.clientY);
+    if (col) col.classList.add('drag-over');
+  }
+  function onPointerUp(e) {
+    if (!dragCard) return;
+    clearDragOver();
+    dragCard.classList.remove('dragging-card');
+    const col = colAt(e.clientX, e.clientY);
+    if (col && col.dataset.status) {
+      const fn = window[dragCard.dataset.moveFn];
+      let args = [];
+      try { args = JSON.parse(dragCard.dataset.moveArgs || '[]'); } catch (err) { args = []; }
+      if (typeof fn === 'function') fn(...args, dragCard.dataset.taskId, col.dataset.status);
+    }
+    dragCard = null;
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+  }
+  document.addEventListener('pointerdown', (e) => {
+    const card = e.target.closest('.task-card');
+    if (!card) return;
+    if (e.target.closest('.t-actions') || e.target.closest('.t-share-row')) return;
+    dragCard = card;
+    card.classList.add('dragging-card');
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    e.preventDefault();
+  });
+}
 
 const DEFAULT_FINANCE_CATEGORIES = ['Alimentação', 'Transporte', 'Moradia', 'Lazer', 'Saúde', 'Educação', 'Salário', 'Outros'];
 const FINANCE_CATEGORY_COLORS = ['mint', 'blue', 'amber', 'purple', 'orange', 'green', 'red'];
@@ -1678,6 +1717,22 @@ const VIEW_TYPES = [
 ];
 let trabalhoViewType = 'quadro';
 let trabalhoCalMonth = todayISO().slice(0, 7);
+let trabalhoFilter = 'all';
+const TRABALHO_FILTERS = [
+  { id: 'all', label: 'Todas' },
+  { id: 'alta', label: 'Prioridade Alta' },
+  { id: 'semana', label: 'Vence essa semana' },
+];
+function applyTrabalhoFilter(tasks, filterId) {
+  if (filterId === 'alta') return tasks.filter(t => t.tier === 'alta' || t.tier === 'urgente');
+  if (filterId === 'semana') {
+    const today = todayISO();
+    const d = new Date(); d.setDate(d.getDate() + 6);
+    const in6 = isoFromDate(d);
+    return tasks.filter(t => t.prazo && t.prazo >= today && t.prazo <= in6);
+  }
+  return tasks;
+}
 
 function renderTrabalho() {
   refreshTiers();
@@ -1701,7 +1756,12 @@ function renderTrabalho() {
     <button class="btn" onclick="onAddWorkTask()">+ Adicionar</button>
   </div>`;
 
-  const tasks = STATE.workTasks.filter(t => t.board === trabalhoActiveBoard);
+  const allTasks = STATE.workTasks.filter(t => t.board === trabalhoActiveBoard);
+  const tasks = applyTrabalhoFilter(allTasks, trabalhoFilter);
+  html += `<div class="filter-chips-row">
+    <div class="period-switch">${TRABALHO_FILTERS.map(f => `<button class="${trabalhoFilter === f.id ? 'active' : ''}" onclick="onTrabalhoFilter('${f.id}')">${f.label}</button>`).join('')}</div>
+    <span class="r-meta">${tasks.length} tarefa(s)</span>
+  </div>`;
   const h = workHandlers();
   if (trabalhoViewType === 'quadro') html += genericBoard(tasks, h);
   else if (trabalhoViewType === 'lista') html += genericList(tasks, h);
@@ -1712,6 +1772,7 @@ function renderTrabalho() {
   html += `</div>`;
   document.getElementById('view-trabalho').innerHTML = html;
 }
+function onTrabalhoFilter(id) { trabalhoFilter = id; renderTrabalho(); }
 function onTrabalhoViewType(id) { trabalhoViewType = id; renderTrabalho(); }
 function onTrabalhoCalNav(dir) { trabalhoCalMonth = addMonths(trabalhoCalMonth, dir); renderTrabalho(); }
 function onTrabalhoBoardTab(id) { trabalhoActiveBoard = id; renderTrabalho(); }
@@ -1737,23 +1798,38 @@ function onDeleteWorkBoard() {
   renderTrabalho();
   renderSidebar();
 }
+function relativeDatePT(prazoISO) {
+  if (!prazoISO) return null;
+  const over = daysOverdue(prazoISO);
+  if (over === 0) return 'hoje';
+  if (over === -1) return 'amanhã';
+  if (over === 1) return 'ontem';
+  if (over > 1) return `atrasada ${over}d`;
+  return `em ${-over}d`;
+}
+function taskProgressPct(status) { return status === 'concluido' ? 100 : status === 'em_andamento' ? 50 : 0; }
 function workHandlers() {
   return {
     moveAttr: (id, dir) => `onMoveWork('${id}',${dir})`,
     delAttr: (id) => `onDeleteWork('${id}')`,
     shareAttr: (id) => `onToggleWorkShared('${id}')`,
+    moveFn: 'onSetWorkStatus',
+    moveArgs: [],
   };
 }
 
 /* ---------------- generic task views (shared by Trabalho + custom tabs) ---------------- */
 function genericTaskCard(t, h) {
   const overdue = daysOverdue(t.prazo) > 0 && t.status !== 'concluido';
-  return `<div class="task-card tier-${t.tier}">
+  const rel = relativeDatePT(t.prazo);
+  const pct = taskProgressPct(t.status);
+  return `<div class="task-card tier-${t.tier}" data-task-id="${t.id}" data-move-fn="${h.moveFn}" data-move-args='${JSON.stringify(h.moveArgs || [])}'>
     <div class="t-title">${t.titulo}</div>
     <div class="t-meta">
-      <span class="t-deadline">${t.prazo ? 'prazo ' + t.prazo + (overdue ? ' · atrasado' : '') : 'sem prazo'}</span>
+      <span class="t-deadline ${overdue ? 'overdue' : ''}">${rel ? rel : 'sem prazo'}</span>
       <span class="pill ${t.tier}">${t.tier}</span>
     </div>
+    <div class="t-progress"><div class="t-progress-fill" style="width:${pct}%"></div></div>
     <div class="t-share-row">
       <input type="checkbox" ${t.compartilhada ? 'checked' : ''} onchange="${h.shareAttr(t.id)}"> compartilhada
     </div>
@@ -1770,7 +1846,7 @@ function editableTh(key) {
 function genericBoard(tasks, h) {
   let html = `<div class="kanban">`;
   for (const col of STATUS_COLS) {
-    html += `<div class="kanban-col"><h4>${editableTh(col.key)}</h4><div class="col-body">`;
+    html += `<div class="kanban-col"><h4>${editableTh(col.key)}</h4><div class="col-body" data-status="${col.id}">`;
     const colTasks = tasks.filter(t => t.status === col.id);
     if (!colTasks.length) html += `<div class="empty-note">vazio</div>`;
     for (const t of colTasks) html += genericTaskCard(t, h);
@@ -1789,7 +1865,7 @@ function genericList(tasks, h) {
     for (const t of colTasks) {
       html += `<div class="row-item">
         <span class="r-text">${t.titulo}</span>
-        <span class="r-meta">${t.prazo || 'sem prazo'}</span>
+        <span class="r-meta">${relativeDatePT(t.prazo) || 'sem prazo'}</span>
         <span class="pill ${t.tier}">${t.tier}</span>
         <div class="t-actions">
           <button onclick="${h.moveAttr(t.id, -1)}" ${t.status === 'a_fazer' ? 'disabled' : ''}>◀</button>
@@ -1892,6 +1968,10 @@ function onMoveWork(id, dir) {
   renderTrabalho();
   renderSidebar();
 }
+function onSetWorkStatus(id, status) {
+  const t = STATE.workTasks.find(x => x.id === id);
+  if (t && t.status !== status) { t.status = status; saveState(); renderTrabalho(); renderSidebar(); }
+}
 function onDeleteWork(id) {
   const idx = STATE.workTasks.findIndex(x => x.id === id);
   if (idx >= 0) STATE.workTasks.splice(idx, 1);
@@ -1986,6 +2066,8 @@ function customHandlers(tabId, listId) {
     moveAttr: (id, dir) => `onMoveCustomTask('${tabId}','${listId}','${id}',${dir})`,
     delAttr: (id) => `onDeleteCustomTask('${tabId}','${listId}','${id}')`,
     shareAttr: (id) => `onToggleCustomTaskShared('${tabId}','${listId}','${id}')`,
+    moveFn: 'onSetCustomTaskStatus',
+    moveArgs: [tabId, listId],
   };
 }
 function renderCustomTab(tabId) {
@@ -2082,6 +2164,12 @@ function onMoveCustomTask(tabId, listId, taskId, dir) {
   const list = tab && tab.lists.find(l => l.id === listId);
   const t = list && list.tasks.find(x => x.id === taskId);
   if (t) { t.status = cycleStatus(t.status, dir); saveState(); renderCustomTab(tabId); renderSidebar(); }
+}
+function onSetCustomTaskStatus(tabId, listId, taskId, status) {
+  const tab = STATE.customTabs[tabId];
+  const list = tab && tab.lists.find(l => l.id === listId);
+  const t = list && list.tasks.find(x => x.id === taskId);
+  if (t && t.status !== status) { t.status = status; saveState(); renderCustomTab(tabId); renderSidebar(); }
 }
 function onDeleteCustomTask(tabId, listId, taskId) {
   const tab = STATE.customTabs[tabId];
@@ -2889,6 +2977,7 @@ function init() {
   refreshTiers();
   renderSidebar();
   initBlockDrag();
+  initKanbanDrag();
 
   const initial = (window.location.hash || '#hoje').replace('#', '');
   switchView(initial);

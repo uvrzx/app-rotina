@@ -580,19 +580,26 @@ svg.icon { display: block; flex-shrink: 0; }
   align-items: center;
   gap: 6px;
 }
-.kanban-col .col-body { display: flex; flex-direction: column; gap: 8px; }
+.kanban-col .col-body { display: flex; flex-direction: column; gap: 8px; min-height: 40px; border-radius: var(--radius-sm); transition: background .1s; }
+.kanban-col .col-body.drag-over { background: var(--mint-bg); outline: 2px dashed var(--mint-text); outline-offset: -2px; }
 .task-card {
   background: var(--card);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   box-shadow: var(--shadow-sm);
+  cursor: grab;
+  touch-action: none;
 }
+.task-card.dragging-card { opacity: .45; cursor: grabbing; }
 .task-card.tier-alta { border-left: 3px solid #c99a2e; }
 .task-card.tier-urgente { border-left: 3px solid #c0523a; }
 .task-card .t-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
 .task-card .t-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .task-card .t-deadline { font-size: 11px; color: var(--text-muted); }
+.task-card .t-deadline.overdue { color: var(--red-text); font-weight: 600; }
+.task-card .t-progress { height: 4px; background: var(--border-soft); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.task-card .t-progress-fill { height: 100%; background: var(--mint-text); }
 .task-card .t-share-row { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-muted); margin-top: 6px; }
 .task-card .t-actions { display: flex; gap: 5px; margin-top: 8px; }
 .task-card .t-actions button {
@@ -606,6 +613,7 @@ svg.icon { display: block; flex-shrink: 0; }
 }
 .task-card .t-actions button:hover { color: var(--text); }
 .task-card .t-actions button:disabled { opacity: .3; cursor: default; }
+.filter-chips-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
 
 /* forms */
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
